@@ -12,6 +12,7 @@ use MrSonj\MultiDomainGhost\Console\Commands\DomainCurrentCommand;
 use MrSonj\MultiDomainGhost\Console\Commands\DomainRemoveCommand;
 use MrSonj\MultiDomainGhost\Console\Commands\GhostDomainAddCommand;
 use MrSonj\MultiDomainGhost\Console\Commands\GhostDomainListCommand;
+use MrSonj\MultiDomainGhost\Console\Commands\GhostInstallCommand;
 use MrSonj\MultiDomainGhost\Contracts\ContentTransformerInterface;
 use MrSonj\MultiDomainGhost\Contracts\DomainEnricherInterface;
 use MrSonj\MultiDomainGhost\Http\Controllers\GhostController;
@@ -87,6 +88,7 @@ class MultiDomainGhostServiceProvider extends ServiceProvider
                 DomainRemoveCommand::class,
                 GhostDomainAddCommand::class,
                 GhostDomainListCommand::class,
+                GhostInstallCommand::class,
             ]);
         }
     }
