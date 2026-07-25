@@ -1,0 +1,65 @@
+{
+    "name": "mr-sonj/laravel-multidomain-ghost",
+    "description": "Headless Ghost CMS integration for Laravel multi-domain applications",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "laravel",
+        "ghost",
+        "ghost-cms",
+        "headless-cms",
+        "multi-domain",
+        "multidomain"
+    ],
+    "autoload": {
+        "psr-4": {
+            "MrSonj\\MultiDomainGhost\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "MrSonj\\MultiDomainGhost\\Tests\\": "tests/"
+        }
+    },
+    "require": {
+        "php": "^8.3|^8.4",
+        "illuminate/support": "^11.0|^12.0|^13.0",
+        "illuminate/http": "^11.0|^12.0|^13.0",
+        "illuminate/cache": "^11.0|^12.0|^13.0",
+        "illuminate/config": "^11.0|^12.0|^13.0",
+        "illuminate/console": "^11.0|^12.0|^13.0",
+        "illuminate/log": "^11.0|^12.0|^13.0",
+        "illuminate/filesystem": "^11.0|^12.0|^13.0",
+        "illuminate/queue": "^11.0|^12.0|^13.0",
+        "illuminate/routing": "^11.0|^12.0|^13.0",
+        "illuminate/events": "^11.0|^12.0|^13.0",
+        "illuminate/view": "^11.0|^12.0|^13.0",
+        "firebase/php-jwt": "^6.0|^7.0"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.0",
+        "orchestra/testbench": "^10.0|^11.0",
+        "pestphp/pest": "^3.0|^4.0"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "MrSonj\\MultiDomainGhost\\MultiDomainGhostServiceProvider"
+            ],
+            "aliases": {
+                "Ghost": "MrSonj\\MultiDomainGhost\\Facades\\Ghost"
+            }
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "scripts": {
+        "test": "pest",
+        "lint": "pint --test"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

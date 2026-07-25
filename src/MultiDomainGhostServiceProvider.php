@@ -1,0 +1,116 @@
+<?php
+
+declare(strict_types=1);
+
+namespace MrSonj\MultiDomainGhost;
+
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
+use MrSonj\MultiDomainGhost\Client\GhostClient;
+use MrSonj\MultiDomainGhost\Console\Commands\DomainCurrentCommand;
+use MrSonj\MultiDomainGhost\Console\Commands\DomainRemoveCommand;
+use MrSonj\MultiDomainGhost\Console\Commands\GhostDomainAddCommand;
+use MrSonj\MultiDomainGhost\Console\Commands\GhostDomainListCommand;
+use MrSonj\MultiDomainGhost\Contracts\ContentTransformerInterface;
+use MrSonj\MultiDomainGhost\Contracts\DomainEnricherInterface;
+use MrSonj\MultiDomainGhost\Http\Controllers\GhostController;
+use MrSonj\MultiDomainGhost\Services\DomainResolver;
+use MrSonj\MultiDomainGhost\Services\GhostCacheManager;
+use MrSonj\MultiDomainGhost\Services\GhostContentService;
+use MrSonj\MultiDomainGhost\Support\NullContentTransformer;
+use MrSonj\MultiDomainGhost\Support\NullEnricher;
+
+class MultiDomainGhostServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        $this->mergeConfigFrom(__DIR__.'/../config/multidomain-ghost.php', 'multidomain-ghost');
+
+        $this->app->scoped(DomainResolver::class);
+
+        $this->app->scoped(GhostClient::class, function ($app) {
+            $resolver = $app->make(DomainResolver::class);
+            $domain = $resolver->resolve();
+            $apiMode = strtolower((string) config('multidomain-ghost.api_mode', 'auto'));
+            $hasAdminCredentials = filled(config('multidomain-ghost.admin_url'))
+                && filled(config('multidomain-ghost.admin_key'));
+            $usesAdminApi = $apiMode === 'admin'
+                || ($apiMode === 'auto' && $app->environment('local') && $hasAdminCredentials);
+
+            return new GhostClient(
+                $domain,
+                $usesAdminApi,
+                $app->make(ContentTransformerInterface::class),
+            );
+        });
+
+        $this->app->scoped(GhostContentService::class);
+        $this->app->scoped(GhostCacheManager::class);
+
+        $this->app->bindIf(DomainEnricherInterface::class, function ($app) {
+            $resolver = $app->make(DomainResolver::class);
+            $domain = $resolver->resolve();
+            $dirKey = $resolver->dirKey();
+
+            $enrichers = (array) config('multidomain-ghost.enrichers', []);
+            if (isset($enrichers[$domain]) && class_exists((string) $enrichers[$domain])) {
+                return $app->make($enrichers[$domain]);
+            }
+
+            $studlyDomain = Str::studly($dirKey);
+            $conventionClass = "App\\Services\\{$dirKey}\\{$studlyDomain}Enricher";
+            if (class_exists($conventionClass)) {
+                return $app->make($conventionClass);
+            }
+
+            return new NullEnricher;
+        });
+
+        $this->app->bindIf(ContentTransformerInterface::class, function ($app) {
+            $transformerConfig = config('multidomain-ghost.transformer');
+            if ($transformerConfig && class_exists((string) $transformerConfig)) {
+                return $app->make($transformerConfig);
+            }
+
+            $conventionClass = 'App\\Services\\GhostContentTransformer';
+            if (class_exists($conventionClass)) {
+                return $app->make($conventionClass);
+            }
+
+            return new NullContentTransformer;
+        });
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                DomainCurrentCommand::class,
+                DomainRemoveCommand::class,
+                GhostDomainAddCommand::class,
+                GhostDomainListCommand::class,
+            ]);
+        }
+    }
+
+    public function boot(): void
+    {
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'multidomain-ghost');
+        $this->registerWebhookRoute();
+
+        if ($this->app->runningInConsole()) {
+            $this->publishes([
+                __DIR__.'/../config/multidomain-ghost.php' => config_path('multidomain-ghost.php'),
+            ], 'multidomain-ghost-config');
+        }
+    }
+
+    private function registerWebhookRoute(): void
+    {
+        $webhook = (array) config('multidomain-ghost.routes.webhook', []);
+
+        if ($webhook['enabled'] ?? true) {
+            Route::middleware((array) ($webhook['middleware'] ?? []))
+                ->post((string) ($webhook['uri'] ?? 'webhook/ghost/post'), [GhostController::class, 'postWebhook'])
+                ->name('multidomain-ghost.webhook');
+        }
+    }
+}
