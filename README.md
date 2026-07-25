@@ -1,187 +1,128 @@
 # Laravel Multi-Domain Ghost
 
-A lightweight Laravel package combining **Multi-Domain Architecture** with **Headless Ghost CMS integration**. It enables a single Laravel application to serve multiple isolated domains, fetching and caching content from Ghost CMS per domain.
+A Laravel package for serving multiple isolated domains from one application while using Ghost as a headless CMS.
 
----
+It provides:
 
-## 🌟 Key Features
+- Per-domain storage, configuration, views and Vite CSS entries.
+- Ghost Content API integration scoped by an internal domain tag.
+- Post and page lookup through their canonical URL.
+- Domain-aware caching and signed Ghost webhooks.
+- Ready-to-use page, blog, sitemap, RSS feed, robots and ads endpoints.
+- Optional domain enrichers and content transformers.
 
-- 🌐 **Multi-Domain Isolation**: Per-domain storage (`storage/{domain_com}`), config overrides (`config/domains/{domain_com}.php`), and CLI `--domain` context.
-- ⚡ **Zero-Manual-Config Automation**: Automated package setup (`php artisan ghost:install`) and 100% automated domain scaffolding (`php artisan domain:add {domain}`).
-- 👻 **Headless Ghost CMS Integration**: Ghost Content API client (with optional local Admin API) filtering content by domain tag (`#domain-com`) and `canonical_url`.
-- 🏷️ **Posts, Pages & `#page` Filtering**: Automatic fallback between Ghost `posts` and `pages` by `canonical_url`, plus auto-exclusion of `#page` tagged items from blog lists.
-- ⚡ **Domain-Aware Caching & Webhooks**: Signed webhook (`POST /webhook/ghost/post`) for instant cache invalidation upon Ghost updates.
-- 🎨 **Flexible Routing & Views**: Route Ghost pages directly to Blade views (`defaults('viewPath', '...')`) with neutral SEO metadata arrays.
-- 🔌 **Extension Hooks**: Inject custom data into pages via `DomainEnricher` or transform Ghost HTML via `ContentTransformer`.
+## Requirements
 
----
+- PHP 8.3 or 8.4.
+- Laravel 11, 12 or 13.
+- A Ghost site with a Custom Integration and Content API key.
 
-## 🚀 Quick Start
+## Quick start
 
-### 1. Install Package
+### 1. Install the package
 
 ```bash
 composer require mr-sonj/laravel-multidomain-ghost
-```
-
-### 2. Run Automated Setup
-
-Run the single setup command to automate all configuration steps:
-
-```bash
 php artisan ghost:install
 ```
 
-**What `ghost:install` automates:**
-- 📄 Publishes `config/multidomain-ghost.php`.
-- 🚀 Patches `bootstrap/app.php` to use the package's multi-domain `Application` class.
-- 🔑 Appends required `GHOST_URL`, `GHOST_CONTENT_KEY`, and `GHOST_WEBHOOK_SECRET` stubs to `.env` and `.env.example`.
-- 🌐 Creates the `config/domain.php` domain registry file.
+`ghost:install`:
 
----
+- Publishes `config/multidomain-ghost.php`.
+- Updates `bootstrap/app.php` to use the package's multi-domain `Application`.
+- Adds the required Ghost variables to `.env` and `.env.example`.
+- Creates `config/domain.php`.
 
-## ⚙️ How It Works
+The command exits with an error when it cannot safely update `bootstrap/app.php`. It does not silently report a complete installation.
 
-### Domain Keying, Ghost Tags & Canonical URLs
+### 2. Configure Ghost
 
-Every post or page authored in Ghost CMS requires 3 key attributes:
+Create a Custom Integration in Ghost Admin and update `.env`:
 
-| Ghost Attribute | Type / Format | Example | Purpose |
-| :--- | :--- | :--- | :--- |
-| **`canonical_url`** | Full Target URL | `https://example.com/about` | Used by `GhostController::page` to match the exact Laravel request URL. |
-| **Domain Tag** | Internal Tag (`#`) | `#example-com` (slug: `hash-example-com`) | Scopes content exclusively to `example.com` (dots ➔ hyphens). |
-| **Type Tag** | Internal Tag (`#`) | `#page` (slug: `hash-page`) | Marks static pages (About, Terms, FAQ). Automatically excluded from blog lists. |
+```dotenv
+GHOST_URL=https://cms.example.com
+GHOST_CONTENT_KEY=your_content_api_key
+GHOST_WEBHOOK_SECRET=use_a_long_random_value
+```
 
-#### Posts vs Pages & Blog Listings
-- **Universal Lookup**: `GhostController::page` searches both Ghost `posts` and `pages` endpoints automatically using the request's `canonical_url`.
-- **Blog Feed Exclusion**: `GhostContentService::dataBlog()` filters out content tagged with `#page` (`tag:-hash-page`), ensuring static pages do not clutter your blog post listings.
+The URL may be either the Ghost site URL or a Ghost API base URL. The package normalizes both forms.
 
----
-
-## 🛠️ Usage
-
-### 1. Adding a New Domain (100% Automated)
-
-To add a new domain to your application, run:
+### 3. Add a domain
 
 ```bash
 php artisan domain:add example.com
 ```
 
-**What `domain:add` automates automatically:**
-- 📁 **Storage**: Creates `storage/example_com/` subdirectories for logs, views, sessions, and cache.
-- ⚙️ **Config Override**: Generates `config/domains/example_com.php` for per-domain overrides.
-- 🎨 **Views Scaffold**: Creates `resources/views/example_com/` directory along with `main.blade.php` layout and `home.blade.php` views.
-- 💅 **CSS**: Generates `resources/css/example_com.css`.
-- ⚡ **Vite Integration**: Auto-injects `'resources/css/example_com.css'` into the `input` array of `vite.config.js`.
-- 🛣️ **Route Scaffolding**: Auto-injects a complete `Route::domain('example.com')` route group with Ghost system routes (`/robots.txt`, `/sitemap.xml`, `/feed`, `/ads.txt`, `/`) into `routes/web.php`.
-- 🌐 **Local Web Server**: Updates `server_name` in `_setup/multi_domain_local_herd.conf` (if present).
-- 📑 **Registry**: Registers the domain in `config/domain.php`.
+This command creates:
 
-#### Additional CLI Commands
+- `storage/example_com/` with isolated Laravel storage directories.
+- `config/domains/example_com.php` with domain-specific overrides.
+- `resources/views/example_com/` containing `main`, `home`, `page`, `blog`, `post` and `contact` views.
+- `resources/css/example_com.css` with framework-independent base styles.
+- A Vite input entry when a supported `input: [...]` array is found.
+- A `Route::domain('example.com')` group in `routes/web.php`.
+- A registry entry in `config/domain.php`.
+
+It also updates `_setup/multi_domain_local_herd.conf` when that optional file exists. Unsupported Vite or route structures produce a warning and a manual instruction.
+
+Use `--force` only when you want to overwrite the generated domain views and CSS:
 
 ```bash
-# List all registered domains & storage status
-php artisan domain:list
-
-# Check current active domain
-php artisan domain --domain=example.com
-
-# Unregister a domain without deleting its config override
-php artisan domain:remove example.com
-
-# Run queue workers or commands scoped to a specific domain
-php artisan queue:work --domain=example.com
-php artisan optimize --domain=example.com
+php artisan domain:add example.com --force
 ```
 
-### 2. Route Configuration (`routes/web.php`)
+### 4. Prepare content in Ghost
 
-Each domain registered in `config/domain.php` gets its own domain group in `routes/web.php`. Use `GhostController::page` with `.defaults('viewPath', '...')` to map Ghost CMS pages to specific Blade views:
+Every Ghost post or page served by a domain needs:
+
+| Attribute | Example | Purpose |
+| --- | --- | --- |
+| Canonical URL | `https://example.com/about` | Matches the incoming Laravel URL. |
+| Internal domain tag | `#example-com` | Limits the content to `example.com`; its slug is `hash-example-com`. |
+| Optional internal type tag | `#page` | Excludes static content from blog listings. |
+
+The package constructs lookup URLs from `https://`, the current request host and its path. The Ghost canonical URL must match that URL, with or without a trailing slash.
+
+After publishing a Ghost page with canonical URL `https://example.com/`, open the domain in a browser. The generated home route and view are ready to render it.
+
+## Generated routes
+
+`domain:add example.com` adds the following routes:
+
+| URL | Controller action | Response |
+| --- | --- | --- |
+| `/` | `page` | Domain home Blade view. |
+| `/blog` | `blog` | Paginated Ghost post listing. |
+| `/blog/{slug}` | `page` | Domain post Blade view. |
+| `/robots.txt` | `robots` | Plain-text robots policy. |
+| `/sitemap.xml` | `sitemap` | XML sitemap. |
+| `/feed` | `feed` | RSS 2.0 feed. |
+| `/ads.txt` | `ads` | Plain-text ads configuration. |
+
+Add application-specific page routes explicitly:
 
 ```php
 use Illuminate\Support\Facades\Route;
 use MrSonj\MultiDomainGhost\Http\Controllers\GhostController;
-use App\Http\Controllers\example_com\ExampleController;
 
 Route::domain('example.com')->group(function () {
-    // 🌐 System & SEO Routes
-    Route::get('/ads.txt', [GhostController::class, 'ads']);
-    Route::get('/robots.txt', [GhostController::class, 'robots'])->name('example-robots');
-    Route::get('/sitemap.xml', [GhostController::class, 'sitemap'])->name('example-sitemap');
-    Route::get('/feed', [GhostController::class, 'feed'])->name('example-feed');
+    Route::get('/about', [GhostController::class, 'page'])
+        ->defaults('viewPath', 'example_com/page')
+        ->name('example_about');
 
-    // 📄 Ghost Content Routes (mapped to Blade views via viewPath)
-    Route::get('/', [GhostController::class, 'page'])->defaults('viewPath', 'example_com/home')->name('example-home');
-    Route::get('/about', [GhostController::class, 'page'])->defaults('viewPath', 'example_com/page')->name('example-about');
-    Route::get('/contact', [GhostController::class, 'page'])->defaults('viewPath', 'example_com/contact')->name('example-contact');
-
-    // 📰 Blog Listing & Post Detail Routes
-    Route::prefix('/blog')->group(function () {
-        Route::get('/', [GhostController::class, 'page'])->defaults('viewPath', 'example_com/blog')->name('example-blog');
-        Route::get('/{slug}', [GhostController::class, 'page'])->defaults('viewPath', 'example_com/post')->name('example-post');
-    });
-
-    // ⚡ Custom Domain-Specific Application Routes
-    Route::prefix('/app')->group(function () {
-        Route::post('/submit', [ExampleController::class, 'submit']);
-    });
+    Route::get('/contact', [GhostController::class, 'page'])
+        ->defaults('viewPath', 'example_com/contact')
+        ->name('example_contact');
 });
 ```
 
-*Note: If `viewPath` is omitted, `GhostController::page` renders the package's default fallback view (`multidomain-ghost::page`).*
+`page()` passes `$content` and `$seo` to the view. `blog()` additionally passes `$dataBlog` and `$page`.
 
----
+If `viewPath` is omitted, the package uses `multidomain-ghost::page` or `multidomain-ghost::blog`.
 
-### 3. Multi-Domain Directory Structure & Layout Inheritance
+## Domain configuration
 
-#### Multi-Domain Application Directory Tree
-
-The multi-domain architecture isolates views, configuration overrides, storage, CSS assets, controllers, and enrichers per domain key (domain dots converted to underscores, e.g. `example.com` ➔ `example_com`):
-
-```text
-my-laravel-app/
-├── app/
-│   ├── Http/
-│   │   └── Controllers/
-│   │       ├── GhostController.php            # Universal Ghost content controller
-│   │       └── example_com/                   # Domain controller namespace: App\Http\Controllers\example_com
-│   │           └── ExampleController.php
-│   └── Services/
-│       └── example_com/                       # Domain service namespace: App\Services\example_com
-│           └── ExampleComEnricher.php         # Custom DomainEnricherInterface implementation
-├── config/
-│   ├── domain.php                             # Domain registry file
-│   └── domains/                               # Per-domain configuration overrides
-│       ├── example_com.php                    # Flat dot-notation config overrides for example.com
-│       └── seconddomain_com.php
-├── resources/
-│   ├── css/                                   # Per-domain CSS files (Vite inputs)
-│   │   ├── example_com.css
-│   │   └── seconddomain_com.css
-│   └── views/                                 # Per-domain Blade views
-│       ├── example_com/                       # Views for example.com
-│       │   ├── main.blade.php                 # Domain layout wrapper
-│       │   ├── home.blade.php                 # Home view (viewPath: 'example_com/home')
-│       │   ├── page.blade.php                 # Generic static page view (About, Terms, FAQ)
-│       │   ├── blog.blade.php                 # Blog listing view
-│       │   ├── post.blade.php                 # Single post view
-│       │   └── contact.blade.php              # Contact view
-│       └── seconddomain_com/                  # Views for seconddomain.com
-│           ├── main.blade.php
-│           └── home.blade.php
-├── routes/
-│   └── web.php                                # Route::domain('example.com')->group(...)
-└── storage/
-    ├── example_com/                           # Per-domain isolated storage (logs, views, sessions, cache)
-    └── seconddomain_com/
-```
-
----
-
-#### Sample Code & Component Patterns
-
-##### A. Per-Domain Config Override (`config/domains/example_com.php`)
+Domain-specific overrides use Laravel dot notation:
 
 ```php
 <?php
@@ -193,73 +134,77 @@ return [
 ];
 ```
 
-##### B. Per-Domain Controller (`app/Http/Controllers/example_com/ExampleController.php`)
+When `example.com` is active, the package loads `config/domains/example_com.php` after the base Laravel configuration.
+
+Console commands can opt into the same domain context:
+
+```bash
+php artisan domain --domain=example.com
+php artisan queue:work --domain=example.com
+php artisan optimize --domain=example.com
+```
+
+Other management commands:
+
+```bash
+# Show registered domains, tags, storage and config status.
+php artisan domain:list
+
+# Unregister a domain while preserving its config and generated files.
+php artisan domain:remove example.com
+
+# Also delete the domain storage directory.
+php artisan domain:remove example.com --force
+```
+
+## Ghost API configuration
+
+The common options are:
+
+| Environment variable | Default | Description |
+| --- | --- | --- |
+| `GHOST_URL` | none | Ghost site or Content API base URL. |
+| `GHOST_CONTENT_KEY` | none | Content API key. |
+| `GHOST_API_VERSION` | `v6.0` | Value of the Ghost `Accept-Version` header. |
+| `GHOST_CACHE_TTL` | 30 days | Cached content lifetime in seconds. |
+| `GHOST_TIMEOUT` | `10` | HTTP timeout in seconds. |
+| `GHOST_RETRY_TIMES` | `2` | HTTP retry count. |
+| `GHOST_VERIFY_SSL` | `true` | Enable TLS certificate verification. |
+| `GHOST_WEBHOOK_SECRET` | none | HMAC secret shared with the Ghost webhook. |
+
+The package can optionally use the Ghost Admin API in local development:
+
+```dotenv
+GHOST_ADMIN_URL=https://cms.example.com
+GHOST_ADMIN_KEY=id:hex_secret
+GHOST_API_MODE=auto
+```
+
+`auto` uses Admin API credentials only in the local environment when both are present. Set the mode to `content` or `admin` to select one explicitly.
+
+See `config/multidomain-ghost.php` for retry delays, webhook tolerance, route middleware, view names and extension bindings.
+
+## Webhook and cache invalidation
+
+Create a Ghost webhook pointing to:
+
+```text
+https://your-laravel-app.com/webhook/ghost/post
+```
+
+The route is registered by the package outside the `web` middleware group, so no CSRF exception is needed. Requests are verified with `X-Ghost-Signature` and `GHOST_WEBHOOK_SECRET`.
+
+Unsigned webhooks are rejected by default. `GHOST_ALLOW_UNSIGNED_WEBHOOKS=true` should only be used in a controlled development environment.
+
+Post, page, slug and blog listing caches are invalidated for affected registered domains.
+
+## Custom domain enricher
+
+An enricher adds application data to `$content` before rendering:
 
 ```php
 <?php
 
-namespace App\Http\Controllers\example_com;
-
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-
-class ExampleController extends Controller
-{
-    public function submit(Request $request)
-    {
-        // Custom domain logic (e.g. process contact form, api submission)
-        return response()->json(['success' => true]);
-    }
-}
-```
-
-##### C. Dynamic Layout Inheritance (`App\Helper::dir()`)
-
-Every domain view inherits from its domain layout using `App\Helper::dir()`. This helper dynamically evaluates to the current domain's folder key (e.g. `example_com`), maintaining domain isolation seamlessly:
-
-```blade
-{{-- resources/views/example_com/home.blade.php --}}
-@extends(App\Helper::dir().'/main')
-
-@section('content')
-    <main class="container mx-auto px-4 py-8">
-        <h1>{{ $content['title'] }}</h1>
-        <article class="prose max-w-none">
-            {!! $content['html'] !!}
-        </article>
-    </main>
-@endsection
-```
-
-##### D. Data Passed to Domain Views
-
-The `GhostController::page` handler automatically passes two key arrays to every rendered Blade view:
-
-- **`$content`**: Cleaned Ghost post/page dataset containing `id`, `title`, `slug`, `html`, `excerpt`, `feature_image`, `published_at`, `tags`, `authors`, and any custom enricher attributes.
-- **`$seo`**: Neutral metadata array containing `title`, `description`, `canonical_url`, `og` (OpenGraph), `twitter`, and `json_ld`.
-
----
-
-### 4. Webhook & Automatic Cache Invalidation
-
-Set up a webhook in Ghost Admin pointing to:
-`https://your-laravel-app.com/webhook/ghost/post`
-
-When a post/page is published, updated, or deleted, Ghost triggers this endpoint. The package verifies the `X-Ghost-Signature` HMAC and automatically clears the cache for affected domains.
-
-> 🔒 **Zero CSRF Configuration Required**: The webhook route is registered automatically outside the standard `web` middleware group. You **do not** need to manually add `'webhook/ghost/post'` to `$middleware->validateCsrfTokens(except: ...)` in `bootstrap/app.php`. Security is enforced via HMAC SHA-256 signature verification (`X-Ghost-Signature` header + `GHOST_WEBHOOK_SECRET`).
-
----
-
-## 🔌 Extension Hooks
-
-### Custom Domain Enricher (`DomainEnricherInterface`)
-
-Attach additional data (e.g. products, dynamic pricing, Airtable items) to `$content` before rendering.
-
-Create `app/Services/example_com/ExampleComEnricher.php`:
-
-```php
 namespace App\Services\example_com;
 
 use MrSonj\MultiDomainGhost\Contracts\DomainEnricherInterface;
@@ -268,21 +213,22 @@ class ExampleComEnricher implements DomainEnricherInterface
 {
     public function enrich(array $content, string $canonicalUrl): array
     {
-        $content['products'] = Product::latest()->take(5)->get();
+        $content['products'] = Product::query()->latest()->take(5)->get();
+
         return $content;
     }
 }
 ```
 
-The package auto-discovers enrichers matching `App\Services\{domain_com}\{StudlyDomain}Enricher`.
+The package discovers `App\Services\{domain_key}\{StudlyDomainKey}Enricher`. An explicit class can instead be set in `multidomain-ghost.enrichers`.
 
-### Custom Content Transformer (`ContentTransformerInterface`)
+## Custom content transformer
 
-Modify raw HTML from Ghost (e.g. inject Alpine attributes, clean up links):
-
-Create `app/Services/GhostContentTransformer.php`:
+A transformer modifies normalized Ghost content before it reaches controllers and views:
 
 ```php
+<?php
+
 namespace App\Services;
 
 use MrSonj\MultiDomainGhost\Contracts\ContentTransformerInterface;
@@ -291,16 +237,30 @@ class GhostContentTransformer implements ContentTransformerInterface
 {
     public function transform(array $content, string $domain): array
     {
-        if (isset($content['html'])) {
-            // Apply custom HTML transformations
-        }
+        // Transform $content['html'] or add normalized attributes.
+
         return $content;
     }
 }
 ```
 
----
+`App\Services\GhostContentTransformer` is discovered automatically. It can also be configured through `multidomain-ghost.transformer`.
 
-## 📄 License
+## Custom sitemap or feed rendering
+
+The default routes return an XML sitemap and RSS 2.0 feed. Applications that need custom rendering can use:
+
+```php
+$links = $controller->sitemapLinks();
+$feed = $controller->feedData($request);
+```
+
+These methods return normalized arrays without imposing a view or serialization format.
+
+## Upgrading from JSON sitemap/feed responses
+
+`sitemap()` and `feed()` now return standards-compliant XML instead of normalized JSON. Code that consumed their previous JSON responses should call `sitemapLinks()` and `feedData()` directly.
+
+## License
 
 MIT

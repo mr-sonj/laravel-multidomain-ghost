@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MrSonj\MultiDomainGhost\Http\Controllers;
 
+use DateTimeImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -123,6 +124,35 @@ class GhostController extends Controller
         ]);
     }
 
+    public function blog(Request $request): View
+    {
+        $page = max(1, (int) $request->integer('page', 1));
+        $dataBlog = $this->dataBlog($page, 15);
+
+        if ($dataBlog === null) {
+            abort(404);
+        }
+
+        $canonicalUrl = $this->canonicalUrl($request);
+        $siteName = trim((string) config('app.name')) ?: $this->domain;
+        $content = $this->getPost($canonicalUrl) ?? [
+            'domain' => $this->domain,
+            'title' => $siteName.' Blog',
+            'canonical_url' => $canonicalUrl,
+            'tags' => [],
+        ];
+        $content = $this->enricher->enrich($content, $canonicalUrl);
+        $viewPath = $request->route('viewPath')
+            ?: config('multidomain-ghost.views.blog', 'multidomain-ghost::blog');
+
+        return view($viewPath)->with([
+            'content' => $content,
+            'seo' => $this->seoData($content),
+            'dataBlog' => $dataBlog,
+            'page' => $page,
+        ]);
+    }
+
     public function robots(): Response
     {
         $robots = "User-agent: *\nDisallow: /cdn-cgi/\nSitemap: https://".$this->domain.'/sitemap.xml';
@@ -172,13 +202,29 @@ class GhostController extends Controller
         return $links;
     }
 
-    /**
-     * Return sitemap data without imposing an XML or Blade structure.
-     */
     public function sitemap(): SymfonyResponse
     {
-        return response()->json([
-            'links' => $this->sitemapLinks(),
+        $urls = collect($this->sitemapLinks())
+            ->map(function (array $link): string {
+                $lastModified = $link['updated_at'] ?? $link['published_at'] ?? null;
+                $lastModifiedXml = filled($lastModified)
+                    ? "\n        <lastmod>".$this->xml((string) $lastModified).'</lastmod>'
+                    : '';
+
+                return '    <url>'
+                    ."\n        <loc>".$this->xml((string) $link['url']).'</loc>'
+                    .$lastModifiedXml
+                    ."\n    </url>";
+            })
+            ->implode("\n");
+
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'
+            ."\n".'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+            .($urls !== '' ? "\n{$urls}" : '')
+            ."\n</urlset>\n";
+
+        return response($xml, 200, [
+            'Content-Type' => 'application/xml; charset=UTF-8',
         ]);
     }
 
@@ -203,12 +249,45 @@ class GhostController extends Controller
         ];
     }
 
-    /**
-     * Return feed data without imposing an RSS, Atom, or Blade structure.
-     */
     public function feed(Request $request): SymfonyResponse
     {
-        return response()->json($this->feedData($request));
+        $feed = $this->feedData($request);
+        $siteUrl = 'https://'.$this->domain;
+        $channelTitle = (string) config('app.name', $this->domain);
+        $items = collect($feed['dataBlog']['posts'] ?? [])
+            ->filter(fn (array $post): bool => filled($post['canonical_url'] ?? $post['url'] ?? null))
+            ->map(function (array $post): string {
+                $url = (string) ($post['canonical_url'] ?? $post['url'] ?? '');
+                $title = (string) ($post['title'] ?? '');
+                $description = (string) ($post['excerpt'] ?? $post['custom_excerpt'] ?? '');
+                $publishedAt = $this->rssDate($post['published_at'] ?? null);
+                $publishedXml = $publishedAt !== null
+                    ? "\n            <pubDate>".$this->xml($publishedAt).'</pubDate>'
+                    : '';
+
+                return '        <item>'
+                    ."\n            <title>".$this->xml($title).'</title>'
+                    ."\n            <link>".$this->xml($url).'</link>'
+                    ."\n            <guid isPermaLink=\"true\">".$this->xml($url).'</guid>'
+                    ."\n            <description>".$this->xml($description).'</description>'
+                    .$publishedXml
+                    ."\n        </item>";
+            })
+            ->implode("\n");
+
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>'
+            ."\n".'<rss version="2.0">'
+            ."\n    <channel>"
+            ."\n        <title>".$this->xml($channelTitle).'</title>'
+            ."\n        <link>".$this->xml($siteUrl).'</link>'
+            ."\n        <description>".$this->xml($channelTitle.' feed').'</description>'
+            .($items !== '' ? "\n{$items}" : '')
+            ."\n    </channel>"
+            ."\n</rss>\n";
+
+        return response($xml, 200, [
+            'Content-Type' => 'application/rss+xml; charset=UTF-8',
+        ]);
     }
 
     public function postWebhook(Request $request, GhostCacheManager $cacheManager): JsonResponse
@@ -303,6 +382,24 @@ class GhostController extends Controller
         $path = $request->getPathInfo() === '/' ? '' : $request->getPathInfo();
 
         return 'https://'.$request->getHost().$path;
+    }
+
+    private function xml(string $value): string
+    {
+        return htmlspecialchars($value, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+    }
+
+    private function rssDate(mixed $value): ?string
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return null;
+        }
+
+        try {
+            return (new DateTimeImmutable($value))->format(DATE_RSS);
+        } catch (\Exception) {
+            return null;
+        }
     }
 
     private function seoValue(array $content, string $key): mixed

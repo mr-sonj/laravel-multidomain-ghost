@@ -12,7 +12,7 @@ class GhostDomainAddCommand extends Command
 {
     protected $signature = 'domain:add
         {domain : Raw domain name, e.g. example.com}
-        {--force : Recreate any missing domain storage directories}';
+        {--force : Overwrite generated domain views and CSS}';
 
     protected $aliases = ['ghost:domain-add'];
 
@@ -90,10 +90,41 @@ PHP;
 
         // 4. Create CSS file
         $cssFile = resource_path("css/{$sanitized}.css");
-        if (! file_exists($cssFile)) {
+        if (! file_exists($cssFile) || $this->option('force')) {
             @mkdir(dirname($cssFile), 0755, true);
-            file_put_contents($cssFile, "/* CSS for {$domain} */\n@import \"tailwindcss\";\n");
-            $this->line("<info>✓ CSS file created:</info> resources/css/{$sanitized}.css");
+            $css = <<<CSS
+            /* Base styles for {$domain}. Replace or extend these styles as needed. */
+            :root {
+                color-scheme: light;
+                font-family: ui-sans-serif, system-ui, sans-serif;
+                line-height: 1.6;
+            }
+
+            body {
+                margin: 0;
+                color: #111827;
+                background: #f9fafb;
+            }
+
+            .container {
+                width: min(72rem, calc(100% - 2rem));
+                margin-inline: auto;
+                padding-block: 2rem;
+            }
+
+            .post-list {
+                display: grid;
+                gap: 1.5rem;
+                padding: 0;
+                list-style: none;
+            }
+
+            a {
+                color: #2563eb;
+            }
+            CSS;
+            file_put_contents($cssFile, $css."\n");
+            $this->line("<info>✓ CSS file ready:</info> resources/css/{$sanitized}.css");
         }
 
         // 5. Update config/domain.php
@@ -137,42 +168,105 @@ PHP;
 
     private function scaffoldViews(string $sanitized, string $domain): void
     {
-        $mainView = resource_path("views/{$sanitized}/main.blade.php");
-        if (! file_exists($mainView)) {
-            $stubMain = <<<BLADE
+        $stubMain = <<<BLADE
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ \$seo['title'] ?? config('app.name') }}</title>
-    @vite(['resources/css/' . App\Helper::dir() . '.css'])
+    @if (! empty(\$seo['description']))
+        <meta name="description" content="{{ \$seo['description'] }}">
+    @endif
+    @if (! empty(\$seo['canonical_url']))
+        <link rel="canonical" href="{{ \$seo['canonical_url'] }}">
+    @endif
+    @vite('resources/css/{$sanitized}.css')
 </head>
-<body class="bg-gray-50 text-gray-900 min-h-screen font-sans antialiased">
+<body>
     @yield('content')
 </body>
 </html>
 BLADE;
-            file_put_contents($mainView, $stubMain);
-            $this->line("<info>✓ Layout created:</info> resources/views/{$sanitized}/main.blade.php");
-        }
 
-        $homeView = resource_path("views/{$sanitized}/home.blade.php");
-        if (! file_exists($homeView)) {
-            $stubHome = <<<BLADE
-@extends(App\Helper::dir().'/main')
+        $stubHome = <<<BLADE
+@extends('{$sanitized}.main')
 
 @section('content')
-    <main class="container mx-auto px-4 py-8">
-        <h1 class="text-3xl font-bold mb-4">{{ \$content['title'] ?? 'Welcome' }}</h1>
-        <article class="prose max-w-none">
+    <main class="container">
+        <h1>{{ \$content['title'] ?? 'Welcome' }}</h1>
+        <article>
             {!! \$content['html'] ?? '<p>Welcome to ' . config('app.name') . '</p>' !!}
         </article>
     </main>
 @endsection
 BLADE;
-            file_put_contents($homeView, $stubHome);
-            $this->line("<info>✓ Home view created:</info> resources/views/{$sanitized}/home.blade.php");
+
+        $stubPage = <<<BLADE
+@extends('{$sanitized}.main')
+
+@section('content')
+    <main class="container">
+        <article>
+            <h1>{{ \$content['title'] ?? '' }}</h1>
+            {!! \$content['html'] ?? '' !!}
+        </article>
+    </main>
+@endsection
+BLADE;
+
+        $stubBlog = <<<BLADE
+@extends('{$sanitized}.main')
+
+@section('content')
+    <main class="container">
+        <h1>{{ \$content['title'] ?? 'Blog' }}</h1>
+        <ul class="post-list">
+            @forelse ((\$dataBlog['posts'] ?? []) as \$post)
+                <li>
+                    <article>
+                        <h2>
+                            <a href="{{ \$post['canonical_url'] ?? '#' }}">
+                                {{ \$post['title'] ?? '' }}
+                            </a>
+                        </h2>
+                        @if (! empty(\$post['excerpt']))
+                            <p>{{ \$post['excerpt'] }}</p>
+                        @endif
+                    </article>
+                </li>
+            @empty
+                <li>No posts found.</li>
+            @endforelse
+        </ul>
+    </main>
+@endsection
+BLADE;
+
+        $views = [
+            'main.blade.php' => $stubMain,
+            'home.blade.php' => $stubHome,
+            'page.blade.php' => $stubPage,
+            'post.blade.php' => $stubPage,
+            'contact.blade.php' => $stubPage,
+            'blog.blade.php' => $stubBlog,
+        ];
+
+        foreach ($views as $filename => $stub) {
+            $view = resource_path("views/{$sanitized}/{$filename}");
+            if (file_exists($view) && ! $this->option('force')) {
+                $this->line("<comment>! View already exists:</comment> resources/views/{$sanitized}/{$filename}");
+
+                continue;
+            }
+
+            if (file_put_contents($view, $stub."\n") === false) {
+                $this->warn("Could not write resources/views/{$sanitized}/{$filename}");
+
+                continue;
+            }
+
+            $this->line("<info>✓ View ready:</info> resources/views/{$sanitized}/{$filename}");
         }
     }
 
@@ -180,6 +274,8 @@ BLADE;
     {
         $viteFile = base_path('vite.config.js');
         if (! file_exists($viteFile)) {
+            $this->warn("vite.config.js was not found. Add 'resources/css/{$sanitized}.css' to your build manually.");
+
             return;
         }
 
@@ -188,6 +284,7 @@ BLADE;
 
         if (str_contains($content, $cssEntry)) {
             $this->line("<comment>! Vite entry already exists:</comment> {$cssEntry}");
+
             return;
         }
 
@@ -198,18 +295,24 @@ BLADE;
             if (! str_ends_with($trimmedInputs, ',')) {
                 $existingInputs .= ',';
             }
-            $replacement = $matches[1] . $existingInputs . "\n                '{$cssEntry}'" . $matches[3];
+            $replacement = $matches[1].$existingInputs."\n                '{$cssEntry}'".$matches[3];
             $content = str_replace($matches[0], $replacement, $content);
 
             file_put_contents($viteFile, $content);
             $this->line("<info>✓ Vite config updated with entry:</info> {$cssEntry}");
+
+            return;
         }
+
+        $this->warn("Could not identify Vite's input array. Add '{$cssEntry}' manually.");
     }
 
     private function injectWebRoutes(string $domain, string $sanitized): void
     {
         $routesFile = base_path('routes/web.php');
         if (! file_exists($routesFile)) {
+            $this->warn('routes/web.php was not found. Domain routes were not generated.');
+
             return;
         }
 
@@ -217,6 +320,7 @@ BLADE;
 
         if (str_contains($content, "Route::domain('{$domain}')") || str_contains($content, 'Route::domain("'.$domain.'")')) {
             $this->line("<comment>! Route group already exists in routes/web.php for:</comment> {$domain}");
+
             return;
         }
 
@@ -226,18 +330,28 @@ BLADE;
 
 
 Route::domain('{$domain}')->group(function () {
-    Route::get('/robots.txt', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'robots']);
-    Route::get('/sitemap.xml', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'sitemap']);
-    Route::get('/feed', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'feed']);
+    Route::get('/robots.txt', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'robots'])
+        ->name('{$routeNamePrefix}_robots');
+    Route::get('/sitemap.xml', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'sitemap'])
+        ->name('{$routeNamePrefix}_sitemap');
+    Route::get('/feed', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'feed'])
+        ->name('{$routeNamePrefix}_feed');
     Route::get('/ads.txt', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'ads']);
 
     Route::get('/', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'page'])
         ->defaults('viewPath', '{$sanitized}/home')
         ->name('{$routeNamePrefix}_home');
+
+    Route::get('/blog', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'blog'])
+        ->defaults('viewPath', '{$sanitized}/blog')
+        ->name('{$routeNamePrefix}_blog');
+    Route::get('/blog/{slug}', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'page'])
+        ->defaults('viewPath', '{$sanitized}/post')
+        ->name('{$routeNamePrefix}_post');
 });
 PHP;
 
-        file_put_contents($routesFile, $content . $routeStub);
+        file_put_contents($routesFile, $content.$routeStub);
         $this->line("<info>✓ Route group injected into routes/web.php for:</info> {$domain}");
     }
 
@@ -252,12 +366,13 @@ PHP;
 
         if (str_contains($content, $domain)) {
             $this->line("<comment>! Local Herd config already contains domain:</comment> {$domain}");
+
             return;
         }
 
         // Add domain to server_name lines
         $content = preg_replace_callback('/(server_name\s+)([^;]+)(;)/', function ($matches) use ($domain) {
-            return $matches[1] . trim($matches[2]) . " {$domain} www.{$domain}" . $matches[3];
+            return $matches[1].trim($matches[2])." {$domain} www.{$domain}".$matches[3];
         }, $content);
 
         file_put_contents($herdFile, $content);

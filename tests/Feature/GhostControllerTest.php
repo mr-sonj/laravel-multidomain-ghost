@@ -137,7 +137,7 @@ class GhostControllerTest extends TestCase
         $this->assertFalse(Route::has('multidomain-ghost.example_com.feed'));
     }
 
-    public function test_sitemap_returns_normalized_data_without_a_view(): void
+    public function test_sitemap_returns_xml_from_normalized_links(): void
     {
         $content = $this->createMock(GhostContentService::class);
         $content->method('domain')->willReturn('example.com');
@@ -167,22 +167,30 @@ class GhostControllerTest extends TestCase
                 'published_at' => '2026-07-24T10:00:00+00:00',
             ],
         ], $controller->sitemapLinks());
-        $this->assertSame([
-            'links' => [
-                [
-                    'url' => 'https://example.com/indexed',
-                    'slug' => 'indexed',
-                    'updated_at' => '2026-07-25T10:00:00+00:00',
-                    'published_at' => '2026-07-24T10:00:00+00:00',
-                ],
-            ],
-        ], $controller->sitemap()->getData(true));
+
+        $response = $controller->sitemap();
+
+        $this->assertSame('application/xml; charset=UTF-8', $response->headers->get('Content-Type'));
+        $this->assertStringContainsString(
+            '<loc>https://example.com/indexed</loc>',
+            $response->getContent(),
+        );
+        $this->assertStringContainsString(
+            '<lastmod>2026-07-25T10:00:00+00:00</lastmod>',
+            $response->getContent(),
+        );
+        $this->assertStringNotContainsString('private', $response->getContent());
     }
 
-    public function test_feed_returns_normalized_data_without_a_view(): void
+    public function test_feed_returns_rss_from_normalized_data(): void
     {
         $dataBlog = [
-            'posts' => [['canonical_url' => 'https://example.com/post']],
+            'posts' => [[
+                'title' => 'Example & Post',
+                'canonical_url' => 'https://example.com/post?source=feed&lang=en',
+                'excerpt' => 'A short description.',
+                'published_at' => '2026-07-24T10:00:00+00:00',
+            ]],
             'meta' => ['pagination' => ['page' => 1]],
         ];
         $content = $this->createMock(GhostContentService::class);
@@ -200,11 +208,46 @@ class GhostControllerTest extends TestCase
             'dataBlog' => $dataBlog,
             'page' => 1,
         ], $controller->feedData($request));
-        $this->assertSame([
-            'domain' => 'example.com',
-            'dataBlog' => $dataBlog,
-            'page' => 1,
-        ], $controller->feed($request)->getData(true));
+        $response = $controller->feed($request);
+
+        $this->assertSame('application/rss+xml; charset=UTF-8', $response->headers->get('Content-Type'));
+        $this->assertStringContainsString('<rss version="2.0">', $response->getContent());
+        $this->assertStringContainsString('<title>Example &amp; Post</title>', $response->getContent());
+        $this->assertStringContainsString(
+            '<link>https://example.com/post?source=feed&amp;lang=en</link>',
+            $response->getContent(),
+        );
+    }
+
+    public function test_blog_passes_post_listing_data_to_the_fallback_view(): void
+    {
+        $dataBlog = [
+            'posts' => [[
+                'title' => 'First post',
+                'canonical_url' => 'https://example.com/blog/first-post',
+            ]],
+        ];
+        $content = $this->createMock(GhostContentService::class);
+        $content->method('domain')->willReturn('example.com');
+        $content->expects($this->once())
+            ->method('dataBlog')
+            ->with(2, 15)
+            ->willReturn($dataBlog);
+        $content->expects($this->once())
+            ->method('getPost')
+            ->with('https://example.com/blog')
+            ->willReturn(null);
+        $request = Request::create('https://example.com/blog?page=2');
+        $route = new RoutingRoute(['GET'], '/blog', fn () => null);
+        $route->bind($request);
+        $request->setRouteResolver(static fn () => $route);
+        $controller = new GhostController(new NullEnricher, $content);
+
+        $view = $controller->blog($request);
+
+        $this->assertSame('multidomain-ghost::blog', $view->name());
+        $this->assertSame($dataBlog, $view->getData()['dataBlog']);
+        $this->assertSame(2, $view->getData()['page']);
     }
 
     private function signedWebhook(array $payload)

@@ -33,6 +33,7 @@ return [
     ],
     'views' => [
         'page' => 'multidomain-ghost::page',
+        'blog' => 'multidomain-ghost::blog',
     ],
     'robots' => [
         'content_signal' => env('ROBOTS_CONTENT_SIGNAL', ''),

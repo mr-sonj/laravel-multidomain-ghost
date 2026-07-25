@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MrSonj\MultiDomainGhost\Console\Commands;
 
 use Illuminate\Console\Command;
+use MrSonj\MultiDomainGhost\Support\BootstrapAppPatcher;
 
 class GhostInstallCommand extends Command
 {
@@ -21,10 +22,18 @@ class GhostInstallCommand extends Command
 
         $this->publishConfig();
         $this->setupEnvironmentVariables();
-        $this->patchBootstrapApp();
+        $bootstrapPatched = $this->patchBootstrapApp();
         $this->createDomainConfigFile();
 
         $this->newLine();
+
+        if (! $bootstrapPatched) {
+            $this->error('Installation is incomplete because bootstrap/app.php could not be updated.');
+            $this->line('Update it to import and use <comment>MrSonj\MultiDomainGhost\Foundation\Application</comment>, then run this command again.');
+
+            return self::FAILURE;
+        }
+
         $this->info('✓ Laravel MultiDomain Ghost package installed successfully!');
         $this->line('You can now add domains using: <comment>php artisan domain:add {domain.com}</comment>');
 
@@ -37,6 +46,7 @@ class GhostInstallCommand extends Command
 
         if (file_exists($configFile) && ! $this->option('force')) {
             $this->line('<comment>! Config file already exists:</comment> config/multidomain-ghost.php');
+
             return;
         }
 
@@ -86,32 +96,47 @@ class GhostInstallCommand extends Command
         }
     }
 
-    private function patchBootstrapApp(): void
+    private function patchBootstrapApp(): bool
     {
         $bootstrapFile = base_path('bootstrap/app.php');
 
         if (! file_exists($bootstrapFile)) {
-            return;
+            $this->error('bootstrap/app.php was not found.');
+
+            return false;
         }
 
         $content = file_get_contents($bootstrapFile);
 
-        if (str_contains($content, 'MrSonj\MultiDomainGhost\Foundation\Application')) {
+        if (! is_string($content)) {
+            $this->error('bootstrap/app.php could not be read.');
+
+            return false;
+        }
+
+        $patched = BootstrapAppPatcher::patch($content);
+
+        if ($patched === null) {
+            $this->error('Unable to identify the Laravel Application bootstrap pattern in bootstrap/app.php.');
+
+            return false;
+        }
+
+        if ($patched === $content) {
             $this->line('<comment>! bootstrap/app.php already using MultiDomain Application</comment>');
-            return;
+
+            return true;
         }
 
-        $targetSearch = 'Illuminate\Foundation\Application::configure';
-        if (str_contains($content, $targetSearch)) {
-            $useStatement = "use MrSonj\MultiDomainGhost\Foundation\Application;\n";
-            if (! str_contains($content, 'use MrSonj\MultiDomainGhost\Foundation\Application;')) {
-                $content = preg_replace('/(<\?php\n)/', "$1\n{$useStatement}", $content, 1);
-            }
-            $content = str_replace($targetSearch, 'Application::configure', $content);
+        if (file_put_contents($bootstrapFile, $patched) === false) {
+            $this->error('bootstrap/app.php could not be written.');
 
-            file_put_contents($bootstrapFile, $content);
-            $this->line('<info>✓ Updated bootstrap/app.php to use MultiDomain Application</info>');
+            return false;
         }
+
+        $this->line('<info>✓ Updated bootstrap/app.php to use MultiDomain Application</info>');
+
+        return true;
     }
 
     private function createDomainConfigFile(): void
@@ -120,10 +145,11 @@ class GhostInstallCommand extends Command
 
         if (file_exists($configDomainFile)) {
             $this->line('<comment>! config/domain.php already exists</comment>');
+
             return;
         }
 
-        $stub = <<<PHP
+        $stub = <<<'PHP'
 <?php
 
 return [
