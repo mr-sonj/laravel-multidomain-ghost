@@ -3,6 +3,7 @@
 namespace MrSonj\MultiDomainGhost\Tests\Feature;
 
 use Illuminate\Filesystem\Filesystem;
+use MrSonj\MultiDomainGhost\Support\DomainRegistry;
 use MrSonj\MultiDomainGhost\Tests\TestCase;
 
 class DomainCommandsTest extends TestCase
@@ -83,6 +84,7 @@ class DomainCommandsTest extends TestCase
         $this->assertFileExists($this->basePath.'/config/domains/example_com.php');
         $domainConfig = require $this->basePath.'/config/domains/example_com.php';
         $this->assertSame('https://example.com', $domainConfig['app.url']);
+        $this->assertSame(['example.com'], DomainRegistry::all());
     }
 
     public function test_domain_remove_deletes_config_override(): void
@@ -90,11 +92,23 @@ class DomainCommandsTest extends TestCase
         $files = new Filesystem;
         $configFile = $this->basePath.'/config/domains/example_com.php';
         $files->put($configFile, "<?php\nreturn [];\n");
+        $cacheFiles = [
+            $this->basePath.'/bootstrap/cache/config-example_com.php',
+            $this->basePath.'/bootstrap/cache/events-example_com.php',
+            $this->basePath.'/bootstrap/cache/routes-v7-example_com.php',
+        ];
+        foreach ($cacheFiles as $cacheFile) {
+            $files->put($cacheFile, "<?php\nreturn [];\n");
+        }
 
         $this->artisan('domain:remove', ['domain' => 'example.com'])
             ->assertExitCode(0);
 
         $this->assertFileDoesNotExist($configFile);
+        $this->assertFalse(DomainRegistry::contains('example.com'));
+        foreach ($cacheFiles as $cacheFile) {
+            $this->assertFileDoesNotExist($cacheFile);
+        }
     }
 
     public function test_domain_remove_with_force_deletes_storage(): void
@@ -114,7 +128,7 @@ class DomainCommandsTest extends TestCase
 
     public function test_domain_list_reports_the_effective_cache_prefix(): void
     {
-        $this->app['config']->set('domains', ['example_com' => []]);
+        $this->writeDomainConfigs(['example_com' => []]);
         $this->app['config']->set('cache.prefix', 'shared_cache');
 
         $this->artisan('domain:list')
@@ -124,7 +138,7 @@ class DomainCommandsTest extends TestCase
 
     public function test_domain_list_reports_a_domain_specific_cache_prefix_override(): void
     {
-        $this->app['config']->set('domains', [
+        $this->writeDomainConfigs([
             'example_com' => ['cache.prefix' => 'example_com_cache'],
         ]);
         $this->app['config']->set('cache.prefix', 'shared_cache');
@@ -136,7 +150,7 @@ class DomainCommandsTest extends TestCase
 
     public function test_domain_list_reports_that_no_enricher_is_wired_up(): void
     {
-        $this->app['config']->set('domains', ['example_com' => []]);
+        $this->writeDomainConfigs(['example_com' => []]);
 
         $this->artisan('domain:list')
             ->expectsOutputToContain('none')
@@ -145,7 +159,7 @@ class DomainCommandsTest extends TestCase
 
     public function test_domain_list_warns_when_a_domain_points_at_a_different_default_cache_store(): void
     {
-        $this->app['config']->set('domains', [
+        $this->writeDomainConfigs([
             'example_com' => [],
             'other_com' => ['cache.default' => 'redis'],
         ]);
@@ -158,7 +172,7 @@ class DomainCommandsTest extends TestCase
 
     public function test_domain_list_stays_quiet_when_every_domain_shares_the_default_cache_store(): void
     {
-        $this->app['config']->set('domains', ['example_com' => []]);
+        $this->writeDomainConfigs(['example_com' => []]);
         $this->app['config']->set('cache.default', 'database');
 
         $this->artisan('domain:list')
@@ -173,5 +187,23 @@ class DomainCommandsTest extends TestCase
         $routes = (new Filesystem)->get($this->basePath.'/routes/web.php');
 
         $this->assertStringContainsString("Route::domain('www.example.com')", $routes);
+        $this->assertStringContainsString('EnsureRegisteredDomain::class', $routes);
+    }
+
+    /**
+     * @param  array<string, array<mixed>>  $domains
+     */
+    private function writeDomainConfigs(array $domains): void
+    {
+        $files = new Filesystem;
+
+        foreach ($domains as $key => $overrides) {
+            $files->put(
+                $this->basePath."/config/domains/{$key}.php",
+                "<?php\n\nreturn ".var_export($overrides, true).";\n",
+            );
+        }
+
+        $this->app['config']->set('domains', $domains);
     }
 }

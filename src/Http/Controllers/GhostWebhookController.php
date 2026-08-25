@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use MrSonj\MultiDomainGhost\Events\GhostPostUpdated;
 use MrSonj\MultiDomainGhost\Services\GhostCacheManager;
+use MrSonj\MultiDomainGhost\Support\DomainName;
 use MrSonj\MultiDomainGhost\Support\DomainRegistry;
 
 /**
@@ -45,21 +46,18 @@ class GhostWebhookController extends Controller
 
         $cacheCleared = [];
         $domainsToClear = [];
-        $registeredDomains = DomainRegistry::all();
-        $enforceDomainAllowlist = $registeredDomains !== [];
 
         foreach ($posts->pluck('canonical_url')->filter()->unique() as $canonicalUrl) {
+            $host = parse_url($canonicalUrl, PHP_URL_HOST);
+            $domain = DomainName::normalize((string) $host);
+
+            if ($domain === '' || ! DomainRegistry::contains($domain)) {
+                continue;
+            }
+
             $variants = $cacheManager->purgePostCache($canonicalUrl);
             array_push($cacheCleared, ...$variants);
-
-            $host = parse_url($canonicalUrl, PHP_URL_HOST);
-            if ($host) {
-                $domain = preg_replace('/:\d+$/', '', $host);
-                $domain = strtolower($domain);
-                if (! $enforceDomainAllowlist || in_array($domain, $registeredDomains, true)) {
-                    $domainsToClear[] = $domain;
-                }
-            }
+            $domainsToClear[] = $domain;
         }
 
         $domainsToClear = array_unique($domainsToClear);

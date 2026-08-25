@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Routing\Controller;
 use MrSonj\MultiDomainGhost\Contracts\DomainEnricherInterface;
+use MrSonj\MultiDomainGhost\Http\Middleware\EnsureRegisteredDomain;
 use MrSonj\MultiDomainGhost\Services\GhostCacheManager;
 use MrSonj\MultiDomainGhost\Services\GhostContentService;
 use MrSonj\MultiDomainGhost\Support\Domain;
@@ -24,6 +25,7 @@ class GhostController extends Controller
         private DomainEnricherInterface $enricher,
         private GhostContentService $ghostContentService
     ) {
+        $this->middleware(EnsureRegisteredDomain::class)->except('postWebhook');
         $this->domain = $ghostContentService->domain();
     }
 

@@ -34,9 +34,10 @@ class GhostDomainListCommand extends Command
         foreach ($domains as $domain) {
             $name = Domain::make($domain);
             $sanitized = $name->key();
-            $cachePrefix = $this->cachePrefixFor($sanitized);
+            $overrides = $this->overridesFor($sanitized);
+            $cachePrefix = $this->cachePrefixFor($overrides);
             $prefixes[] = $cachePrefix;
-            $stores[$domain] = $this->cacheStoreFor($sanitized);
+            $stores[$domain] = $this->cacheStoreFor($overrides);
 
             $rows[] = [
                 $domain,
@@ -64,10 +65,8 @@ class GhostDomainListCommand extends Command
      * The cache prefix a request for this domain actually runs under: its own
      * config/domains override when present, otherwise the application default.
      */
-    private function cachePrefixFor(string $sanitized): string
+    private function cachePrefixFor(array $overrides): string
     {
-        $overrides = (array) config("domains.{$sanitized}", []);
-
         foreach (['cache.prefix', 'cache_prefix'] as $key) {
             if (filled($overrides[$key] ?? null)) {
                 return (string) $overrides[$key];
@@ -82,13 +81,18 @@ class GhostDomainListCommand extends Command
      * overrides are applied before service providers register, so this is also
      * the store the Ghost cache would be derived from for that domain.
      */
-    private function cacheStoreFor(string $sanitized): string
+    private function cacheStoreFor(array $overrides): string
     {
-        $overrides = (array) config("domains.{$sanitized}", []);
-
         return filled($overrides['cache.default'] ?? null)
             ? (string) $overrides['cache.default']
             : (string) config('cache.default', '');
+    }
+
+    private function overridesFor(string $sanitized): array
+    {
+        $overrides = require config_path("domains/{$sanitized}.php");
+
+        return is_array($overrides) ? $overrides : [];
     }
 
     /**

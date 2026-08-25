@@ -11,6 +11,7 @@ use MrSonj\MultiDomainGhost\Contracts\DomainEnricherInterface;
 use MrSonj\MultiDomainGhost\Events\GhostPostUpdated;
 use MrSonj\MultiDomainGhost\Http\Controllers\GhostController;
 use MrSonj\MultiDomainGhost\Http\Controllers\GhostWebhookController;
+use MrSonj\MultiDomainGhost\Http\Middleware\EnsureRegisteredDomain;
 use MrSonj\MultiDomainGhost\Services\GhostCacheManager;
 use MrSonj\MultiDomainGhost\Services\GhostContentService;
 use MrSonj\MultiDomainGhost\Support\NullEnricher;
@@ -19,10 +20,16 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class GhostControllerTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->setRegisteredDomains(['example_com' => []]);
+    }
+
     protected function getEnvironmentSetUp($app): void
     {
         $app->bind(DomainEnricherInterface::class, NullEnricher::class);
-        $app['config']->set('domains.example_com', []);
         $app['config']->set('multidomain-ghost.webhook_secret', 'secret123');
     }
 
@@ -57,6 +64,29 @@ class GhostControllerTest extends TestCase
         $this->assertSame('multidomain-ghost::page', $view->name());
         $this->assertSame('Fallback page', $view->getData()['content']['title']);
         $this->assertSame('Fallback page', $view->getData()['seo']['title']);
+    }
+
+    public function test_ghost_routes_are_guarded_by_the_file_registry(): void
+    {
+        $content = $this->createMock(GhostContentService::class);
+        $content->method('domain')->willReturn('example.com');
+        $controller = new GhostController(new NullEnricher, $content);
+
+        $this->assertContains(
+            EnsureRegisteredDomain::class,
+            array_column($controller->getMiddleware(), 'middleware'),
+        );
+    }
+
+    public function test_an_existing_ghost_route_returns_404_after_its_config_file_is_removed(): void
+    {
+        Route::domain('removed.example.com')->get(
+            '/guarded-domain',
+            [GhostController::class, 'robots'],
+        );
+        $this->setRegisteredDomains([]);
+
+        $this->get('https://removed.example.com/guarded-domain')->assertNotFound();
     }
 
     public function test_post_webhook_delegates_to_the_webhook_controller(): void
@@ -128,10 +158,10 @@ class GhostControllerTest extends TestCase
         ])->assertForbidden();
     }
 
-    public function test_page_webhook_works_without_a_domain_allowlist(): void
+    public function test_page_webhook_ignores_every_domain_when_registry_is_empty(): void
     {
         Event::fake();
-        $this->app['config']->set('domains', []);
+        $this->setRegisteredDomains([]);
 
         $response = $this->signedWebhook([
             'name' => 'page.published',
@@ -143,11 +173,10 @@ class GhostControllerTest extends TestCase
             ],
         ]);
 
-        $response->assertOk()->assertJsonPath('content_type', 'page');
-        Event::assertDispatched(
-            GhostPostUpdated::class,
-            fn (GhostPostUpdated $event): bool => $event->domains === ['another-example.com'],
-        );
+        $response->assertOk()
+            ->assertJsonPath('message', 'Ignored. Domain not registered in this application.')
+            ->assertJsonPath('cache_cleared', []);
+        Event::assertNotDispatched(GhostPostUpdated::class);
     }
 
     public function test_package_registers_only_the_ghost_webhook_route(): void

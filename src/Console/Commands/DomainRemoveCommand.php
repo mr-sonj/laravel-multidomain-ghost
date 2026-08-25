@@ -7,6 +7,7 @@ namespace MrSonj\MultiDomainGhost\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use MrSonj\MultiDomainGhost\Support\Domain;
+use MrSonj\MultiDomainGhost\Support\DomainCacheFiles;
 use MrSonj\MultiDomainGhost\Support\DomainName;
 
 class DomainRemoveCommand extends Command
@@ -35,7 +36,18 @@ class DomainRemoveCommand extends Command
             return self::FAILURE;
         }
 
-        $files->delete($configFile);
+        $failedCacheFiles = DomainCacheFiles::clear($domain);
+        if ($failedCacheFiles !== []) {
+            $this->error('Could not clear stale domain caches: '.implode(', ', $failedCacheFiles));
+
+            return self::FAILURE;
+        }
+
+        if (! $files->delete($configFile)) {
+            $this->error("Could not delete config/domains/{$name->key()}.php.");
+
+            return self::FAILURE;
+        }
 
         if ($this->option('force')) {
             $storagePath = base_path('storage/'.$name->key());

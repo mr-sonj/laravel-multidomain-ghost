@@ -12,7 +12,12 @@
 
 ### Changed
 
-- `DomainRegistry::all()` now discovers registered domains directly from `config('domains')`.
+- `DomainRegistry::all()` now discovers registered domains directly from `config/domains/*.php`,
+  so stale Laravel config caches cannot hide a newly added domain or retain a removed one.
+- Ghost routes reject hosts which no longer have a domain config file, and domain add/remove clear
+  stale per-domain config, route and event cache files.
+- Ghost webhooks now fail closed when the registry is empty and validate a canonical URL's domain
+  before purging any cache keys.
 - Removed `config/domain.php` generation and `GHOST_REGISTERED_DOMAINS` env option.
 - `domain:add` and `domain:remove` now manage `config/domains/{key}.php` directly without dynamic `var_export`.
 - Ghost caching is now `multidomain-ghost.cache.enabled` (`GHOST_CACHE_ENABLED`)

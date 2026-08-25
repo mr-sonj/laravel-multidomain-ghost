@@ -6,6 +6,7 @@ namespace MrSonj\MultiDomainGhost\Console\Commands;
 
 use Illuminate\Console\Command;
 use MrSonj\MultiDomainGhost\Support\Domain;
+use MrSonj\MultiDomainGhost\Support\DomainCacheFiles;
 use MrSonj\MultiDomainGhost\Support\DomainName;
 
 class GhostDomainAddCommand extends Command
@@ -24,6 +25,13 @@ class GhostDomainAddCommand extends Command
         $domain = $name->host();
         if (! DomainName::isRegistrable($domain)) {
             $this->error("Invalid domain name [{$domain}].");
+
+            return self::FAILURE;
+        }
+
+        $failedCacheFiles = DomainCacheFiles::clear($domain);
+        if ($failedCacheFiles !== []) {
+            $this->error('Could not clear stale domain caches: '.implode(', ', $failedCacheFiles));
 
             return self::FAILURE;
         }
@@ -336,7 +344,7 @@ Route::domain('www.{$domain}')->group(function () {
     Route::get('/{path?}', function (?string \$path = null) {
         return redirect()->away('https://{$domain}/'.ltrim((string) \$path, '/'), 301);
     })->where('path', '.*')->name('{$routeNamePrefix}_www_redirect');
-});
+})->middleware(\MrSonj\MultiDomainGhost\Http\Middleware\EnsureRegisteredDomain::class);
 PHP;
 
         file_put_contents($routesFile, $content.$routeStub);
