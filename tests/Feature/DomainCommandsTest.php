@@ -150,4 +150,14 @@ class DomainCommandsTest extends TestCase
 
         $this->assertStringContainsString("Route::domain('www.example.com')", $routes);
     }
+
+    public function test_domain_list_shows_a_domain_registered_only_through_the_package_allowlist(): void
+    {
+        $this->app['config']->set('multidomain-ghost.domains', ['env-only.com']);
+        $this->app['config']->set('domain.domains', []);
+
+        $this->artisan('domain:list')
+            ->expectsOutputToContain('env-only.com')
+            ->assertExitCode(0);
+    }
 }

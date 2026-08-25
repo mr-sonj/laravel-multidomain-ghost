@@ -16,6 +16,7 @@ use MrSonj\MultiDomainGhost\Contracts\DomainEnricherInterface;
 use MrSonj\MultiDomainGhost\Events\GhostPostUpdated;
 use MrSonj\MultiDomainGhost\Services\GhostCacheManager;
 use MrSonj\MultiDomainGhost\Services\GhostContentService;
+use MrSonj\MultiDomainGhost\Support\DomainRegistry;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class GhostController extends Controller
@@ -331,12 +332,8 @@ class GhostController extends Controller
 
         $cacheCleared = [];
         $domainsToClear = [];
-        $packageDomains = (array) config('multidomain-ghost.domains', []);
-        $registeredDomains = array_map(
-            'strtolower',
-            ! empty($packageDomains) ? $packageDomains : array_keys(config('domain.domains', [])),
-        );
-        $enforceDomainAllowlist = ! empty($registeredDomains);
+        $registeredDomains = DomainRegistry::all();
+        $enforceDomainAllowlist = $registeredDomains !== [];
 
         foreach ($posts->pluck('canonical_url')->filter()->unique() as $canonicalUrl) {
             $variants = $cacheManager->purgePostCache($canonicalUrl);

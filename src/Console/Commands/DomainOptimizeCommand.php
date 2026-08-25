@@ -6,6 +6,7 @@ namespace MrSonj\MultiDomainGhost\Console\Commands;
 
 use Illuminate\Console\Command;
 use MrSonj\MultiDomainGhost\Support\DomainName;
+use MrSonj\MultiDomainGhost\Support\DomainRegistry;
 use Symfony\Component\Process\PhpExecutableFinder;
 use Symfony\Component\Process\Process;
 
@@ -27,7 +28,7 @@ class DomainOptimizeCommand extends Command
 
     public function handle(): int
     {
-        $domains = $this->registeredDomains();
+        $domains = DomainRegistry::all();
 
         if ($only = $this->option('only')) {
             $only = DomainName::normalize((string) $only);
@@ -99,27 +100,6 @@ class DomainOptimizeCommand extends Command
         }
 
         return true;
-    }
-
-    /**
-     * Registered domains, preferring the package allowlist and falling back to
-     * the config/domain.php registry that domain:add maintains.
-     */
-    private function registeredDomains(): array
-    {
-        $packageDomains = array_values(array_filter((array) config('multidomain-ghost.domains', [])));
-
-        if ($packageDomains !== []) {
-            return array_values(array_unique(array_map(
-                static fn ($domain): string => DomainName::normalize((string) $domain),
-                $packageDomains,
-            )));
-        }
-
-        return array_values(array_unique(array_map(
-            static fn ($domain): string => DomainName::normalize((string) $domain),
-            array_keys((array) config('domain.domains', [])),
-        )));
     }
 
     private function phpBinary(): string

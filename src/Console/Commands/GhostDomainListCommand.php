@@ -7,6 +7,7 @@ namespace MrSonj\MultiDomainGhost\Console\Commands;
 use Illuminate\Console\Command;
 use MrSonj\MultiDomainGhost\Services\DomainResolver;
 use MrSonj\MultiDomainGhost\Support\DomainEnricherLocator;
+use MrSonj\MultiDomainGhost\Support\DomainRegistry;
 
 class GhostDomainListCommand extends Command
 {
@@ -18,10 +19,10 @@ class GhostDomainListCommand extends Command
 
     public function handle(): int
     {
-        $domains = config('domain.domains', []);
+        $domains = DomainRegistry::all();
 
-        if (empty($domains) || ! is_array($domains)) {
-            $this->warn('No domains registered in config/domain.php');
+        if ($domains === []) {
+            $this->warn('No domains registered in config/domain.php or GHOST_REGISTERED_DOMAINS.');
 
             return self::SUCCESS;
         }
@@ -30,8 +31,7 @@ class GhostDomainListCommand extends Command
         $prefixes = [];
         $stores = [];
 
-        foreach ($domains as $domain => $raw) {
-            $domain = (string) $domain;
+        foreach ($domains as $domain) {
             $sanitized = DomainResolver::dirKeyFor($domain);
             $cachePrefix = $this->cachePrefixFor($sanitized);
             $prefixes[] = $cachePrefix;
