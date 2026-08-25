@@ -36,20 +36,4 @@ class DomainRegistryTest extends TestCase
 
         $this->assertSame(['example.com'], DomainRegistry::all());
     }
-
-    public function test_has_normalizes_before_comparing(): void
-    {
-        $this->app['config']->set('multidomain-ghost.domains', ['example.com']);
-
-        $this->assertTrue(DomainRegistry::has('EXAMPLE.com.'));
-        $this->assertFalse(DomainRegistry::has('other.com'));
-    }
-
-    public function test_it_is_empty_when_neither_registry_is_populated(): void
-    {
-        $this->app['config']->set('multidomain-ghost.domains', []);
-        $this->app['config']->set('domain.domains', []);
-
-        $this->assertTrue(DomainRegistry::isEmpty());
-    }
 }

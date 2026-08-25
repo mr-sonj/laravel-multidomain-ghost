@@ -2,6 +2,7 @@
 
 namespace MrSonj\MultiDomainGhost\Tests\Feature;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route as RoutingRoute;
 use Illuminate\Support\Facades\Event;
@@ -9,6 +10,8 @@ use Illuminate\Support\Facades\Route;
 use MrSonj\MultiDomainGhost\Contracts\DomainEnricherInterface;
 use MrSonj\MultiDomainGhost\Events\GhostPostUpdated;
 use MrSonj\MultiDomainGhost\Http\Controllers\GhostController;
+use MrSonj\MultiDomainGhost\Http\Controllers\GhostWebhookController;
+use MrSonj\MultiDomainGhost\Services\GhostCacheManager;
 use MrSonj\MultiDomainGhost\Services\GhostContentService;
 use MrSonj\MultiDomainGhost\Support\NullEnricher;
 use MrSonj\MultiDomainGhost\Tests\TestCase;
@@ -54,6 +57,27 @@ class GhostControllerTest extends TestCase
         $this->assertSame('multidomain-ghost::page', $view->name());
         $this->assertSame('Fallback page', $view->getData()['content']['title']);
         $this->assertSame('Fallback page', $view->getData()['seo']['title']);
+    }
+
+    public function test_post_webhook_delegates_to_the_webhook_controller(): void
+    {
+        $content = $this->createMock(GhostContentService::class);
+        $content->method('domain')->willReturn('example.com');
+
+        $webhookController = $this->createMock(GhostWebhookController::class);
+        $webhookController->expects($this->once())
+            ->method('__invoke')
+            ->willReturn(new JsonResponse(['ok' => true]));
+
+        $this->app->instance(GhostWebhookController::class, $webhookController);
+
+        $controller = new GhostController(new NullEnricher, $content);
+        $response = $controller->postWebhook(
+            Request::create('/webhook'),
+            $this->createMock(GhostCacheManager::class)
+        );
+
+        $this->assertTrue($response->getData()->ok);
     }
 
     public function test_post_webhook_dispatches_event(): void

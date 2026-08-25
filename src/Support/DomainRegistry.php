@@ -32,14 +32,4 @@ final class DomainRegistry
             $source,
         ))));
     }
-
-    public static function has(string $domain): bool
-    {
-        return in_array(DomainName::normalize($domain), self::all(), true);
-    }
-
-    public static function isEmpty(): bool
-    {
-        return self::all() === [];
-    }
 }

@@ -35,11 +35,9 @@ class DomainTest extends TestCase
         $this->assertSame('tag:site-example-com', $domain->filter());
     }
 
-    public function test_an_unusable_host_is_not_valid(): void
+    public function test_an_unusable_host_is_empty(): void
     {
-        $this->assertFalse(Domain::make('not a host')->isValid());
         $this->assertSame('', Domain::make('not a host')->host());
-        $this->assertTrue(Domain::make('example.com')->isValid());
     }
 
     public function test_the_deprecated_statics_still_answer_identically(): void

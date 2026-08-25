@@ -174,9 +174,11 @@ The common options are:
 | `GHOST_RETRY_TIMES` | `2` | HTTP retry count. |
 | `GHOST_VERIFY_SSL` | `true` | Enable TLS certificate verification. |
 | `GHOST_WEBHOOK_SECRET` | none | HMAC secret shared with the Ghost webhook. |
+| `GHOST_CACHE_ENABLED` | `true` in production, `false` otherwise | Opt into caching in local development to reproduce bugs. |
 | `GHOST_CACHE_MISS_TTL` | `300` | Lifetime of a cached "not found" answer, in seconds. |
 | `GHOST_CACHE_EMPTY_TTL` | `300` | Lifetime of a cached empty response, in seconds. |
 | `GHOST_CACHE_PREFIX` | `multidomain_ghost` | Prefix of the shared Ghost cache store. |
+| `GHOST_REGISTERED_DOMAINS` | none | Comma-separated allowlist of domains to serve. Takes precedence over `config/domain.php`. |
 | `GHOST_MAX_BLOG_PAGE` | `200` | Highest `?page=` served on blog and feed routes; past it, 404. |
 | `GHOST_SEO_DEFAULT_IMAGE` | see below | Template for the fallback social image. |
 
@@ -383,10 +385,6 @@ These methods return normalized arrays without imposing a view or serialization 
 
 `sitemap()` and `feed()` now return standards-compliant XML instead of normalized JSON. Code that consumed their previous JSON responses should call `sitemapLinks()` and `feedData()` directly.
 
-## License
-
-MIT
-
 ## Scope Intentionally Left Out of Package
 
 The following responsibilities belong to the consumer application or deployment environment:
@@ -404,3 +402,7 @@ The following responsibilities belong to the consumer application or deployment 
 - Generating production queue workers or scheduler services.
 - Running database migrations.
 - Replacing Ghost Admin or Ghost authoring workflows.
+
+## License
+
+MIT

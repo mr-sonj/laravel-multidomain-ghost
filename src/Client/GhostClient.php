@@ -15,14 +15,14 @@ use MrSonj\MultiDomainGhost\Support\Domain;
 
 class GhostClient
 {
-    private string $domainTag;
+    private readonly Domain $domainName;
 
     public function __construct(
         private string $domain,
         private bool $usesAdminApi,
         private ?ContentTransformerInterface $contentTransformer = null,
     ) {
-        $this->domainTag = Domain::make($domain)->tag();
+        $this->domainName = Domain::make($domain);
     }
 
     /**
@@ -190,7 +190,7 @@ class GhostClient
     public function findPrimaryTag(array $content): ?array
     {
         foreach ($content['tags'] ?? [] as $tag) {
-            if (($tag['slug'] ?? null) === $this->domainTag) {
+            if (($tag['slug'] ?? null) === $this->domainName->tag()) {
                 return $tag;
             }
         }
@@ -302,7 +302,7 @@ class GhostClient
 
     private function domainFilter(?string $filter = null): string
     {
-        $filters = ["tag:{$this->domainTag}"];
+        $filters = [$this->domainName->filter()];
         if ($filter !== null && $filter !== '') {
             $filters[] = $filter;
         }
