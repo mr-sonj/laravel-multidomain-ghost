@@ -79,4 +79,11 @@ class GhostControllerConfigurationTest extends TestCase
 
         $this->assertSame('legacy-entry, DIRECT', $this->controller()->ads()->getContent());
     }
+
+    public function test_seo_data_falls_back_to_the_active_domain_when_content_has_none(): void
+    {
+        $seo = $this->controller()->seoData(['title' => 'Hand built']);
+
+        $this->assertSame('https://example.com/#website', $seo['json_ld']['is_part_of']);
+    }
 }

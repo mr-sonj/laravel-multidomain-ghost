@@ -83,7 +83,7 @@ class GhostController extends Controller
                 'published_at' => $content['published_at'] ?? null,
                 'updated_at' => $content['updated_at'] ?? null,
                 'language' => $primaryTagData['locale'] ?? 'en-US',
-                'is_part_of' => 'https://'.$content['domain'].'/#website',
+                'is_part_of' => 'https://'.($content['domain'] ?? $this->domain).'/#website',
             ],
             'primary_tag_data' => $primaryTagData,
         ];
