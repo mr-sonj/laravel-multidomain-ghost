@@ -15,12 +15,21 @@ namespace MrSonj\MultiDomainGhost\Support;
 final class DomainRegistry
 {
     /**
+     * @var array<int, string>|null
+     */
+    private static ?array $memoized = null;
+
+    /**
      * Every registered hostname, normalized, de-duplicated and sorted by file name.
      *
      * @return array<int, string>
      */
     public static function all(): array
     {
+        if (self::$memoized !== null) {
+            return self::$memoized;
+        }
+
         $files = glob(config_path('domains/*.php')) ?: [];
         sort($files, SORT_NATURAL);
 
@@ -29,7 +38,7 @@ final class DomainRegistry
             $files,
         );
 
-        return array_values(array_filter(array_unique(array_map(
+        return self::$memoized = array_values(array_filter(array_unique(array_map(
             static fn (string $domain): string => DomainName::normalize($domain),
             $domains,
         )), static fn (string $domain): bool => $domain !== '' && DomainName::isRegistrable($domain)));
@@ -40,5 +49,10 @@ final class DomainRegistry
         $domain = DomainName::normalize($domain);
 
         return $domain !== '' && is_file(config_path('domains/'.DomainName::dirKey($domain).'.php'));
+    }
+
+    public static function flush(): void
+    {
+        self::$memoized = null;
     }
 }

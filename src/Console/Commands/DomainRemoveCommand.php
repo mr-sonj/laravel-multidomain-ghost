@@ -9,6 +9,7 @@ use Illuminate\Filesystem\Filesystem;
 use MrSonj\MultiDomainGhost\Support\Domain;
 use MrSonj\MultiDomainGhost\Support\DomainCacheFiles;
 use MrSonj\MultiDomainGhost\Support\DomainName;
+use MrSonj\MultiDomainGhost\Support\DomainRegistry;
 
 class DomainRemoveCommand extends Command
 {
@@ -56,6 +57,8 @@ class DomainRemoveCommand extends Command
                 $this->warn("Deleted {$storagePath}");
             }
         }
+
+        DomainRegistry::flush();
 
         $this->info("Domain {$domain} removed.");
 

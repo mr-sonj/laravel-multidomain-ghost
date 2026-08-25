@@ -1,0 +1,30 @@
+[2026-08-25 14:26:02] production.ERROR: Uncaught Exception: The /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/bootstrap/cache directory must be present and writable. in /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/laravel/framework/src/Illuminate/Foundation/PackageManifest.php:179
+Stack trace:
+#0 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/orchestra/testbench-core/src/Foundation/PackageManifest.php(158): Illuminate\Foundation\PackageManifest->write(Array)
+#1 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/laravel/framework/src/Illuminate/Foundation/PackageManifest.php(132): Orchestra\Testbench\Foundation\PackageManifest->write(Array)
+#2 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/laravel/framework/src/Illuminate/Foundation/PackageManifest.php(108): Illuminate\Foundation\PackageManifest->build()
+#3 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/orchestra/testbench-core/src/Foundation/PackageManifest.php(103): Illuminate\Foundation\PackageManifest->getManifest()
+#4 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/laravel/framework/src/Illuminate/Foundation/PackageManifest.php(90): Orchestra\Testbench\Foundation\PackageManifest->getManifest()
+#5 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/laravel/framework/src/Illuminate/Foundation/PackageManifest.php(79): Illuminate\Foundation\PackageManifest->config('aliases')
+#6 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/laravel/framework/src/Illuminate/Foundation/Bootstrap/RegisterFacades.php(26): Illuminate\Foundation\PackageManifest->aliases()
+#7 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/orchestra/testbench-core/src/Concerns/CreatesApplication.php(532): Illuminate\Foundation\Bootstrap\RegisterFacades->bootstrap(Object(Illuminate\Foundation\Application))
+#8 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/orchestra/testbench-core/src/Concerns/CreatesApplication.php(287): Orchestra\Testbench\Foundation\Application->resolveApplicationBootstrappers(Object(Illuminate\Foundation\Application))
+#9 Command line code(1): Orchestra\Testbench\Foundation\Application->createApplication()
+#10 {main}
+  thrown {"exception":"[object] (Symfony\\Component\\ErrorHandler\\Error\\FatalError(code: 0): Uncaught Exception: The /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/bootstrap/cache directory must be present and writable. in /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/laravel/framework/src/Illuminate/Foundation/PackageManifest.php:179
+Stack trace:
+#0 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/orchestra/testbench-core/src/Foundation/PackageManifest.php(158): Illuminate\\Foundation\\PackageManifest->write(Array)
+#1 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/laravel/framework/src/Illuminate/Foundation/PackageManifest.php(132): Orchestra\\Testbench\\Foundation\\PackageManifest->write(Array)
+#2 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/laravel/framework/src/Illuminate/Foundation/PackageManifest.php(108): Illuminate\\Foundation\\PackageManifest->build()
+#3 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/orchestra/testbench-core/src/Foundation/PackageManifest.php(103): Illuminate\\Foundation\\PackageManifest->getManifest()
+#4 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/laravel/framework/src/Illuminate/Foundation/PackageManifest.php(90): Orchestra\\Testbench\\Foundation\\PackageManifest->getManifest()
+#5 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/laravel/framework/src/Illuminate/Foundation/PackageManifest.php(79): Illuminate\\Foundation\\PackageManifest->config('aliases')
+#6 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/laravel/framework/src/Illuminate/Foundation/Bootstrap/RegisterFacades.php(26): Illuminate\\Foundation\\PackageManifest->aliases()
+#7 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/orchestra/testbench-core/src/Concerns/CreatesApplication.php(532): Illuminate\\Foundation\\Bootstrap\\RegisterFacades->bootstrap(Object(Illuminate\\Foundation\\Application))
+#8 /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/orchestra/testbench-core/src/Concerns/CreatesApplication.php(287): Orchestra\\Testbench\\Foundation\\Application->resolveApplicationBootstrappers(Object(Illuminate\\Foundation\\Application))
+#9 Command line code(1): Orchestra\\Testbench\\Foundation\\Application->createApplication()
+#10 {main}
+  thrown at /Volumes/Workspaces/Projects/packages/laravel-multidomain-ghost/vendor/laravel/framework/src/Illuminate/Foundation/PackageManifest.php:179)
+[stacktrace]
+#0 {main}
+"} 
