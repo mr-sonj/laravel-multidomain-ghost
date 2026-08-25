@@ -128,33 +128,13 @@ PHP;
             $this->line("<info>✓ CSS file ready:</info> resources/css/{$sanitized}.css");
         }
 
-        // 5. Update config/domain.php
-        $configDomainFile = config_path('domain.php');
-        $domainConfig = file_exists($configDomainFile) ? require $configDomainFile : [];
-        if (! is_array($domainConfig)) {
-            $this->error('config/domain.php must return an array.');
-
-            return self::FAILURE;
-        }
-
-        $domainConfig['domains'] = is_array($domainConfig['domains'] ?? null)
-            ? $domainConfig['domains']
-            : [];
-        $domainConfig['domains'][$domain] = $domain;
-        ksort($domainConfig['domains']);
-
-        $phpContent = "<?php\n\nreturn ".var_export($domainConfig, true).";\n";
-        file_put_contents($configDomainFile, $phpContent);
-        config()->set('domain', $domainConfig);
-        $this->line('<info>✓ Domain registered in config/domain.php</info>');
-
-        // 6. Auto-inject CSS entry into vite.config.js
+        // 5. Auto-inject CSS entry into vite.config.js
         $this->injectViteConfig($sanitized);
 
-        // 7. Auto-inject Route group into routes/web.php
+        // 6. Auto-inject Route group into routes/web.php
         $this->injectWebRoutes($domain, $sanitized);
 
-        // 8. Auto-update local Herd config if present
+        // 7. Auto-update local Herd config if present
         $this->updateHerdConfig($domain);
 
         if (file_exists(base_path(".env.{$domain}"))) {

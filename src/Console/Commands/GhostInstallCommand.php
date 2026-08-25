@@ -23,7 +23,6 @@ class GhostInstallCommand extends Command
         $this->publishConfig();
         $this->setupEnvironmentVariables();
         $bootstrapPatched = $this->patchBootstrapApp();
-        $this->createDomainConfigFile();
 
         $this->newLine();
 
@@ -137,35 +136,5 @@ class GhostInstallCommand extends Command
         $this->line('<info>✓ Updated bootstrap/app.php to use MultiDomain Application</info>');
 
         return true;
-    }
-
-    private function createDomainConfigFile(): void
-    {
-        $configDomainFile = config_path('domain.php');
-
-        if (file_exists($configDomainFile)) {
-            $this->line('<comment>! config/domain.php already exists</comment>');
-
-            return;
-        }
-
-        $stub = <<<'PHP'
-<?php
-
-return [
-    /*
-    |--------------------------------------------------------------------------
-    | Multi-Domain Registry
-    |--------------------------------------------------------------------------
-    | Registered domain mappings for the application.
-    */
-    'domains' => [
-        // 'example.com' => 'example.com',
-    ],
-];
-PHP;
-
-        file_put_contents($configDomainFile, $stub);
-        $this->line('<info>✓ Created config/domain.php registry</info>');
     }
 }

@@ -4,14 +4,17 @@
 
 ### Fixed
 
-- `domain:list` read only `config/domain.php` and therefore never showed a domain
-  registered through `GHOST_REGISTERED_DOMAINS`, while `domain:optimize` and the
-  webhook honoured both. All three now read one `DomainRegistry`.
+- Consolidated domain registration from 4 fragmented sources down to 1 single source of truth:
+  the presence of `config/domains/{key}.php`.
+- Eliminated the silent bug where `GHOST_REGISTERED_DOMAINS` shadowed all domains in `config/domain.php`.
 - `seoData()` read `$content['domain']` without a guard, so building the array by
   hand produced a warning and an `is_part_of` of `https:///#website`.
 
 ### Changed
 
+- `DomainRegistry::all()` now discovers registered domains directly from `config('domains')`.
+- Removed `config/domain.php` generation and `GHOST_REGISTERED_DOMAINS` env option.
+- `domain:add` and `domain:remove` now manage `config/domains/{key}.php` directly without dynamic `var_export`.
 - Ghost caching is now `multidomain-ghost.cache.enabled` (`GHOST_CACHE_ENABLED`)
   instead of a hard-coded `local` environment check. The default is unchanged:
   off in local, on everywhere else.

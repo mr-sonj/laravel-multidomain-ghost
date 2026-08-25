@@ -21,7 +21,7 @@ class DomainCommandsTest extends TestCase
 
         foreach ([
             'bootstrap/cache',
-            'config',
+            'config/domains',
             'resources/css',
             'resources/views',
             'routes',
@@ -30,10 +30,6 @@ class DomainCommandsTest extends TestCase
             $files->makeDirectory($this->basePath.'/'.$directory, 0755, true);
         }
 
-        $files->put(
-            $this->basePath.'/config/domain.php',
-            "<?php\n\nreturn ['domains' => []];\n",
-        );
         $files->put(
             $this->basePath.'/routes/web.php',
             "<?php\n\nuse Illuminate\\Support\\Facades\\Route;\n",
@@ -83,14 +79,42 @@ class DomainCommandsTest extends TestCase
             "'resources/css/example_com.css'",
             $files->get($this->basePath.'/vite.config.js'),
         );
-        $domainConfig = require $this->basePath.'/config/domain.php';
 
-        $this->assertSame('example.com', $domainConfig['domains']['example.com']);
+        $this->assertFileExists($this->basePath.'/config/domains/example_com.php');
+        $domainConfig = require $this->basePath.'/config/domains/example_com.php';
+        $this->assertSame('https://example.com', $domainConfig['app.url']);
+    }
+
+    public function test_domain_remove_deletes_config_override(): void
+    {
+        $files = new Filesystem;
+        $configFile = $this->basePath.'/config/domains/example_com.php';
+        $files->put($configFile, "<?php\nreturn [];\n");
+
+        $this->artisan('domain:remove', ['domain' => 'example.com'])
+            ->assertExitCode(0);
+
+        $this->assertFileDoesNotExist($configFile);
+    }
+
+    public function test_domain_remove_with_force_deletes_storage(): void
+    {
+        $files = new Filesystem;
+        $configFile = $this->basePath.'/config/domains/example_com.php';
+        $storageDir = $this->basePath.'/storage/example_com';
+        $files->put($configFile, "<?php\nreturn [];\n");
+        $files->makeDirectory($storageDir, 0755, true);
+
+        $this->artisan('domain:remove', ['domain' => 'example.com', '--force' => true])
+            ->assertExitCode(0);
+
+        $this->assertFileDoesNotExist($configFile);
+        $this->assertDirectoryDoesNotExist($storageDir);
     }
 
     public function test_domain_list_reports_the_effective_cache_prefix(): void
     {
-        $this->app['config']->set('domain.domains', ['example.com' => 'example.com']);
+        $this->app['config']->set('domains', ['example_com' => []]);
         $this->app['config']->set('cache.prefix', 'shared_cache');
 
         $this->artisan('domain:list')
@@ -100,9 +124,10 @@ class DomainCommandsTest extends TestCase
 
     public function test_domain_list_reports_a_domain_specific_cache_prefix_override(): void
     {
-        $this->app['config']->set('domain.domains', ['example.com' => 'example.com']);
+        $this->app['config']->set('domains', [
+            'example_com' => ['cache.prefix' => 'example_com_cache'],
+        ]);
         $this->app['config']->set('cache.prefix', 'shared_cache');
-        $this->app['config']->set('domains.example_com', ['cache.prefix' => 'example_com_cache']);
 
         $this->artisan('domain:list')
             ->expectsOutputToContain('example_com_cache')
@@ -111,7 +136,7 @@ class DomainCommandsTest extends TestCase
 
     public function test_domain_list_reports_that_no_enricher_is_wired_up(): void
     {
-        $this->app['config']->set('domain.domains', ['example.com' => 'example.com']);
+        $this->app['config']->set('domains', ['example_com' => []]);
 
         $this->artisan('domain:list')
             ->expectsOutputToContain('none')
@@ -120,12 +145,11 @@ class DomainCommandsTest extends TestCase
 
     public function test_domain_list_warns_when_a_domain_points_at_a_different_default_cache_store(): void
     {
-        $this->app['config']->set('domain.domains', [
-            'example.com' => 'example.com',
-            'other.com' => 'other.com',
+        $this->app['config']->set('domains', [
+            'example_com' => [],
+            'other_com' => ['cache.default' => 'redis'],
         ]);
         $this->app['config']->set('cache.default', 'database');
-        $this->app['config']->set('domains.other_com', ['cache.default' => 'redis']);
 
         $this->artisan('domain:list')
             ->expectsOutputToContain('Domain [other.com] overrides cache.default to [redis]')
@@ -134,7 +158,7 @@ class DomainCommandsTest extends TestCase
 
     public function test_domain_list_stays_quiet_when_every_domain_shares_the_default_cache_store(): void
     {
-        $this->app['config']->set('domain.domains', ['example.com' => 'example.com']);
+        $this->app['config']->set('domains', ['example_com' => []]);
         $this->app['config']->set('cache.default', 'database');
 
         $this->artisan('domain:list')
@@ -149,15 +173,5 @@ class DomainCommandsTest extends TestCase
         $routes = (new Filesystem)->get($this->basePath.'/routes/web.php');
 
         $this->assertStringContainsString("Route::domain('www.example.com')", $routes);
-    }
-
-    public function test_domain_list_shows_a_domain_registered_only_through_the_package_allowlist(): void
-    {
-        $this->app['config']->set('multidomain-ghost.domains', ['env-only.com']);
-        $this->app['config']->set('domain.domains', []);
-
-        $this->artisan('domain:list')
-            ->expectsOutputToContain('env-only.com')
-            ->assertExitCode(0);
     }
 }

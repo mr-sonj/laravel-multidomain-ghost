@@ -22,7 +22,7 @@ class GhostDomainListCommand extends Command
         $domains = DomainRegistry::all();
 
         if ($domains === []) {
-            $this->warn('No domains registered in config/domain.php or GHOST_REGISTERED_DOMAINS.');
+            $this->warn('No domains registered in config/domains/*.php.');
 
             return self::SUCCESS;
         }

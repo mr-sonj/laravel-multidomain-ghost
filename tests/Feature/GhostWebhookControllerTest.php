@@ -18,7 +18,7 @@ class GhostWebhookControllerTest extends TestCase
         });
 
         $this->app['config']->set('multidomain-ghost.allow_unsigned_webhooks', true);
-        $this->app['config']->set('multidomain-ghost.domains', ['example.com']);
+        $this->app['config']->set('domains.example_com', []);
 
         $response = $this->postJson('/webhook/ghost/post', [
             'name' => 'post.published',
@@ -50,7 +50,7 @@ class GhostWebhookControllerTest extends TestCase
     public function test_it_ignores_a_domain_that_is_not_registered(): void
     {
         $this->app['config']->set('multidomain-ghost.allow_unsigned_webhooks', true);
-        $this->app['config']->set('multidomain-ghost.domains', ['example.com']);
+        $this->app['config']->set('domains.example_com', []);
 
         $this->postJson('/webhook/ghost/post', [
             'post' => ['current' => ['canonical_url' => 'https://stranger.com/a']],

@@ -22,7 +22,7 @@ composer require mr-sonj/laravel-multidomain-ghost
 php artisan ghost:install
 ```
 
-Publishes `config/multidomain-ghost.php`, creates `config/domain.php`, adds the Ghost variables to
+Publishes `config/multidomain-ghost.php`, adds the Ghost variables to
 `.env` and `.env.example`, and switches `bootstrap/app.php` to the package's multi-domain
 `Application`. It exits with an error rather than reporting a complete install when it cannot edit
 `bootstrap/app.php` safely.
@@ -45,12 +45,12 @@ GHOST_WEBHOOK_SECRET=use_a_long_random_value
 php artisan domain:add example.com
 ```
 
-Creates `storage/example_com/`, `config/domains/example_com.php`,
+Creates `storage/example_com/`, `config/domains/example_com.php` (which registers the domain),
 `resources/views/example_com/` (`main`, `home`, `page`, `blog`, `post`, `contact`),
-`resources/css/example_com.css`, a Vite input entry, a `Route::domain()` group in `routes/web.php`,
-and the registry entry in `config/domain.php`. Unsupported Vite or route structures produce a
-warning with manual instructions, and `_setup/multi_domain_local_herd.conf` is updated when
-that optional file exists. Pass `--force` only to overwrite generated views and CSS.
+`resources/css/example_com.css`, a Vite input entry, and a `Route::domain()` group in `routes/web.php`.
+Unsupported Vite or route structures produce a warning with manual instructions, and
+`_setup/multi_domain_local_herd.conf` is updated when that optional file exists. Pass `--force` only
+to overwrite generated views and CSS.
 
 ### 4. Publish content in Ghost
 
@@ -136,7 +136,7 @@ php artisan optimize --domain=example.com
 
 ```bash
 php artisan domain:list                        # domains, tags, storage and config status
-php artisan domain:remove example.com          # unregister, keep config and generated files
+php artisan domain:remove example.com          # remove domain config override
 php artisan domain:remove example.com --force  # also delete the storage directory
 ```
 
@@ -156,7 +156,6 @@ php artisan domain:remove example.com --force  # also delete the storage directo
 | `GHOST_CACHE_MISS_TTL` | `300` | Lifetime of a cached "not found" answer. |
 | `GHOST_CACHE_EMPTY_TTL` | `300` | Lifetime of a cached empty response. |
 | `GHOST_CACHE_PREFIX` | `multidomain_ghost` | Prefix of the shared Ghost cache store. |
-| `GHOST_REGISTERED_DOMAINS` | none | Comma-separated allowlist; takes precedence over `config/domain.php`. |
 | `GHOST_MAX_BLOG_PAGE` | `200` | Highest `?page=` served on blog and feed routes; past it, 404. |
 | `GHOST_SEO_DEFAULT_IMAGE` | — | Template for the fallback social image. |
 
