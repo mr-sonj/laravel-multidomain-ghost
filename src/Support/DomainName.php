@@ -26,9 +26,21 @@ final class DomainName
 
         $host = $server['HTTP_HOST'] ?? $server['SERVER_NAME'] ?? null;
 
-        return filled($host) ? self::normalize((string) $host) : null;
+        if (! filled($host)) {
+            return null;
+        }
+
+        return self::normalize((string) $host) ?: null;
     }
 
+    /**
+     * Reduce any host-ish input to a bare, lowercase hostname.
+     *
+     * Returns an empty string for anything that is not a usable hostname. The
+     * value ends up in cache keys, storage paths and config lookups, and it can
+     * originate from an unvalidated Host header, so a syntactically impossible
+     * host must not be passed through verbatim.
+     */
     public static function normalize(string $domain): string
     {
         $domain = strtolower(trim($domain));
@@ -39,7 +51,26 @@ final class DomainName
             $domain = (string) (parse_url('//'.$domain, PHP_URL_HOST) ?: $domain);
         }
 
-        return rtrim($domain, '.');
+        $domain = rtrim($domain, '.');
+
+        return self::isHostname($domain) ? $domain : '';
+    }
+
+    /**
+     * Whether the value is shaped like a hostname: labels of letters, digits and
+     * hyphens separated by dots, or a bracketed IPv6 literal.
+     */
+    public static function isHostname(string $domain): bool
+    {
+        if ($domain === '' || strlen($domain) > 253) {
+            return false;
+        }
+
+        if (str_starts_with($domain, '[') && str_ends_with($domain, ']')) {
+            return filter_var(trim($domain, '[]'), FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false;
+        }
+
+        return preg_match('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/', $domain) === 1;
     }
 
     public static function dirKey(string $domain): string

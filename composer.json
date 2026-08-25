@@ -34,11 +34,12 @@
         "illuminate/routing": "^11.0|^12.0|^13.0",
         "illuminate/events": "^11.0|^12.0|^13.0",
         "illuminate/view": "^11.0|^12.0|^13.0",
-        "firebase/php-jwt": "^6.0|^7.0"
+        "firebase/php-jwt": "^6.0|^7.0",
+        "symfony/process": "^7.0|^8.0"
     },
     "require-dev": {
         "laravel/pint": "^1.0",
-        "orchestra/testbench": "^10.0|^11.0",
+        "orchestra/testbench": "^9.0|^10.0|^11.0",
         "pestphp/pest": "^3.0|^4.0"
     },
     "extra": {
@@ -58,7 +59,8 @@
     },
     "scripts": {
         "test": "pest",
-        "lint": "pint --test"
+        "lint": "pint --test",
+        "format": "pint"
     },
     "minimum-stability": "stable",
     "prefer-stable": true

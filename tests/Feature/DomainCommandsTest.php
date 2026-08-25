@@ -87,4 +87,67 @@ class DomainCommandsTest extends TestCase
 
         $this->assertSame('example.com', $domainConfig['domains']['example.com']);
     }
+
+    public function test_domain_list_reports_the_effective_cache_prefix(): void
+    {
+        $this->app['config']->set('domain.domains', ['example.com' => 'example.com']);
+        $this->app['config']->set('cache.prefix', 'shared_cache');
+
+        $this->artisan('domain:list')
+            ->expectsOutputToContain('shared_cache')
+            ->assertExitCode(0);
+    }
+
+    public function test_domain_list_reports_a_domain_specific_cache_prefix_override(): void
+    {
+        $this->app['config']->set('domain.domains', ['example.com' => 'example.com']);
+        $this->app['config']->set('cache.prefix', 'shared_cache');
+        $this->app['config']->set('domains.example_com', ['cache.prefix' => 'example_com_cache']);
+
+        $this->artisan('domain:list')
+            ->expectsOutputToContain('example_com_cache')
+            ->assertExitCode(0);
+    }
+
+    public function test_domain_list_reports_that_no_enricher_is_wired_up(): void
+    {
+        $this->app['config']->set('domain.domains', ['example.com' => 'example.com']);
+
+        $this->artisan('domain:list')
+            ->expectsOutputToContain('none')
+            ->assertExitCode(0);
+    }
+
+    public function test_domain_list_warns_when_a_domain_points_at_a_different_default_cache_store(): void
+    {
+        $this->app['config']->set('domain.domains', [
+            'example.com' => 'example.com',
+            'other.com' => 'other.com',
+        ]);
+        $this->app['config']->set('cache.default', 'database');
+        $this->app['config']->set('domains.other_com', ['cache.default' => 'redis']);
+
+        $this->artisan('domain:list')
+            ->expectsOutputToContain('Domain [other.com] overrides cache.default to [redis]')
+            ->assertExitCode(0);
+    }
+
+    public function test_domain_list_stays_quiet_when_every_domain_shares_the_default_cache_store(): void
+    {
+        $this->app['config']->set('domain.domains', ['example.com' => 'example.com']);
+        $this->app['config']->set('cache.default', 'database');
+
+        $this->artisan('domain:list')
+            ->doesntExpectOutputToContain('cache.default')
+            ->assertExitCode(0);
+    }
+
+    public function test_domain_add_routes_the_www_host_to_the_apex(): void
+    {
+        $this->artisan('domain:add', ['domain' => 'example.com'])->assertExitCode(0);
+
+        $routes = (new Filesystem)->get($this->basePath.'/routes/web.php');
+
+        $this->assertStringContainsString("Route::domain('www.example.com')", $routes);
+    }
 }

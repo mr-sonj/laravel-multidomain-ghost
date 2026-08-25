@@ -99,6 +99,9 @@ After publishing a Ghost page with canonical URL `https://example.com/`, open th
 | `/feed` | `feed` | RSS 2.0 feed. |
 | `/ads.txt` | `ads` | Plain-text ads configuration. |
 
+A second group redirects `www.example.com` to the apex domain with a 301; without it the
+`www` host matches no route and returns 404.
+
 Add application-specific page routes explicitly:
 
 ```php
@@ -171,6 +174,11 @@ The common options are:
 | `GHOST_RETRY_TIMES` | `2` | HTTP retry count. |
 | `GHOST_VERIFY_SSL` | `true` | Enable TLS certificate verification. |
 | `GHOST_WEBHOOK_SECRET` | none | HMAC secret shared with the Ghost webhook. |
+| `GHOST_CACHE_MISS_TTL` | `300` | Lifetime of a cached "not found" answer, in seconds. |
+| `GHOST_CACHE_EMPTY_TTL` | `300` | Lifetime of a cached empty response, in seconds. |
+| `GHOST_CACHE_PREFIX` | `multidomain_ghost` | Prefix of the shared Ghost cache store. |
+| `GHOST_MAX_BLOG_PAGE` | `200` | Highest `?page=` served on blog and feed routes; past it, 404. |
+| `GHOST_SEO_DEFAULT_IMAGE` | see below | Template for the fallback social image. |
 
 The package can optionally use the Ghost Admin API in local development:
 
@@ -198,6 +206,108 @@ Unsigned webhooks are rejected by default. `GHOST_ALLOW_UNSIGNED_WEBHOOKS=true` 
 
 Post, page, slug and blog listing caches are invalidated for affected registered domains.
 
+### Where Ghost content is cached
+
+Ghost cache keys already carry their own domain (`ghost:{domain}:...`), so the package
+keeps them in **one dedicated cache store shared by every domain** rather than under each
+domain's `cache.prefix`. That is what makes invalidation deterministic: a webhook that
+arrives on one domain can purge any other domain.
+
+The store is derived automatically from your default cache store - same driver, same
+connection, with a fixed prefix. Nothing to configure:
+
+```php
+'cache' => [
+    'store' => env('GHOST_CACHE_STORE'),          // null: auto-provision
+    'prefix' => env('GHOST_CACHE_PREFIX', 'multidomain_ghost'),
+    'ttl' => (int) env('GHOST_CACHE_TTL', 60 * 60 * 24 * 30),
+    'miss_ttl' => (int) env('GHOST_CACHE_MISS_TTL', 300),
+    'empty_ttl' => (int) env('GHOST_CACHE_EMPTY_TTL', 300),
+],
+```
+
+`miss_ttl` remembers "this URL has no content" so an unknown URL cannot reach Ghost on
+every request. Set it to `0` to disable. `empty_ttl` gives successful-but-empty responses
+a short life, so a mistyped domain tag cannot freeze an empty sitemap for the full TTL.
+
+The store is declared in `cache.stores` when the package boots, so artisan can address it
+directly:
+
+```bash
+php artisan cache:clear multidomain-ghost
+```
+
+If you would rather own the declaration - recommended once more than one thing depends on
+it - put the store in `config/cache.php` yourself and point the package at it:
+
+```php
+// config/cache.php
+'multidomain-ghost' => [
+    'driver' => 'database',
+    'prefix' => 'multidomain_ghost',
+],
+```
+
+```dotenv
+GHOST_CACHE_STORE=multidomain-ghost
+```
+
+That also removes the one way the shared store can come apart: the auto-provisioned store
+is derived from `cache.default`, so a domain that overrides `cache.default` in its
+`config/domains/{key}.php` would derive a *different* store and stop receiving webhook
+invalidation. `domain:list` warns when it sees that.
+
+Your own `cache.prefix` per domain still matters for everything else your application
+caches, including sessions on a cache-backed driver. `domain:list` shows the effective
+prefix per domain and warns when two domains share one.
+
+### When Ghost is unreachable
+
+Upstream failures - an outage, a revoked key, a timeout - are logged and turned into
+"no content". Pages 404, listings come back empty, and the rest of the application keeps
+serving. Ghost errors never surface as a 500.
+
+## Deployment
+
+Cached config, routes and events are stored **per domain**. A bare `php artisan config:cache`
+writes a file no domain request ever reads, so the cache silently does nothing. Build them
+one domain at a time:
+
+```bash
+# Build config, route and event caches for every registered domain.
+php artisan domain:optimize
+
+# Preview the commands without running them.
+php artisan domain:optimize --pretend
+
+# One domain only.
+php artisan domain:optimize --only=example.com
+
+# Clear instead of build.
+php artisan domain:optimize --clear
+```
+
+Each domain also needs its `storage/{domain_key}` directory to exist - `domain:add` creates
+it. Without it the domain falls back to the shared storage path and shares sessions, logs
+and cached config with every other domain.
+
+### Queues
+
+`queue:work --domain=example.com` works out of the box. `queue:listen` spawns child
+processes, so it needs the package's queue provider to forward the domain. In `config/app.php`:
+
+```php
+use Illuminate\Queue\QueueServiceProvider;
+use Illuminate\Support\ServiceProvider;
+
+'providers' => ServiceProvider::defaultProviders()->replace([
+    QueueServiceProvider::class => MrSonj\MultiDomainGhost\Queue\QueueServiceProvider::class,
+])->toArray(),
+```
+
+The Laravel 11+ skeleton ships without a `providers` key in `config/app.php`; add one as
+shown above if you use `queue:listen`.
+
 ## Custom domain enricher
 
 An enricher adds application data to `$content` before rendering:
@@ -221,6 +331,18 @@ class ExampleComEnricher implements DomainEnricherInterface
 ```
 
 The package discovers `App\Services\{domain_key}\{StudlyDomainKey}Enricher`. An explicit class can instead be set in `multidomain-ghost.enrichers`.
+
+The convention puts the domain key inside a PHP namespace, which cannot start with a digit
+or contain a hyphen. Domains such as `10mailbox.com` or `my-site.com` therefore have no
+conventional class name and **must** be mapped explicitly:
+
+```php
+'enrichers' => [
+    '10mailbox.com' => App\Services\Tenmailbox\TenmailboxEnricher::class,
+],
+```
+
+`php artisan domain:list` shows which enricher each domain resolves to, or `none`.
 
 ## Custom content transformer
 

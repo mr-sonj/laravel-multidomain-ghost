@@ -349,6 +349,13 @@ Route::domain('{$domain}')->group(function () {
         ->defaults('viewPath', '{$sanitized}/post')
         ->name('{$routeNamePrefix}_post');
 });
+
+// Without this, requests to the www host match no route at all and 404.
+Route::domain('www.{$domain}')->group(function () {
+    Route::get('/{path?}', function (?string \$path = null) {
+        return redirect()->away('https://{$domain}/'.ltrim((string) \$path, '/'), 301);
+    })->where('path', '.*')->name('{$routeNamePrefix}_www_redirect');
+});
 PHP;
 
         file_put_contents($routesFile, $content.$routeStub);

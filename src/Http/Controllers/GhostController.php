@@ -42,8 +42,8 @@ class GhostController extends Controller
         $description = $this->seoValue($content, 'meta_description')
             ?? $this->seoValue($content, 'excerpt')
             ?? '';
-        $urlDirImage = 'https://'.$content['domain'].'/img/'.str_replace('.', '_', $content['domain']);
-        $image = $this->seoValue($content, 'feature_image') ?? $urlDirImage.'/apple-touch-icon.png';
+        $image = $this->seoValue($content, 'feature_image')
+            ?? $this->defaultSeoImage((string) ($content['domain'] ?? $this->domain));
         $isPage = isset($content['tags']) && collect($content['tags'])->pluck('name')->contains('#page');
         $contentType = $isPage ? 'WebPage' : 'Article';
         $primaryTagData = $this->primaryTagData($content);
@@ -126,7 +126,7 @@ class GhostController extends Controller
 
     public function blog(Request $request): View
     {
-        $page = max(1, (int) $request->integer('page', 1));
+        $page = $this->requestedPage($request);
         $dataBlog = $this->dataBlog($page, 15);
 
         if ($dataBlog === null) {
@@ -155,22 +155,37 @@ class GhostController extends Controller
 
     public function robots(): Response
     {
-        $robots = "User-agent: *\nDisallow: /cdn-cgi/\nSitemap: https://".$this->domain.'/sitemap.xml';
+        $lines = ['User-agent: *'];
+
+        foreach ((array) config('multidomain-ghost.robots.disallow', ['/cdn-cgi/']) as $path) {
+            $lines[] = 'Disallow: '.$path;
+        }
+
+        $sitemap = $this->expandDomainPlaceholders(
+            (string) config('multidomain-ghost.robots.sitemap', 'https://{domain}/sitemap.xml'),
+            $this->domain,
+        );
+
+        if ($sitemap !== '') {
+            $lines[] = 'Sitemap: '.$sitemap;
+        }
 
         $contentSignal = config('multidomain-ghost.robots.content_signal')
             ?: config('services.robots.content_signal');
         if (! empty($contentSignal)) {
-            $robots .= "\nContent-Signal: ".$contentSignal;
+            $lines[] = 'Content-Signal: '.$contentSignal;
         }
 
-        return response(trim($robots))->header('Content-Type', 'text/plain;charset=UTF-8');
+        return response(trim(implode("\n", $lines)))
+            ->header('Content-Type', 'text/plain;charset=UTF-8');
     }
 
     public function ads(): Response
     {
-        $ads = config('services.adsense.ads_txt', '');
+        $ads = config('multidomain-ghost.ads.txt')
+            ?: config('services.adsense.ads_txt', '');
 
-        return response(trim($ads))->header('Content-Type', 'text/plain;charset=UTF-8');
+        return response(trim((string) $ads))->header('Content-Type', 'text/plain;charset=UTF-8');
     }
 
     /**
@@ -233,10 +248,7 @@ class GhostController extends Controller
      */
     public function feedData(Request $request): array
     {
-        $page = (int) $request->get('page', 1);
-        if ($page < 1) {
-            $page = 1;
-        }
+        $page = $this->requestedPage($request);
         $dataBlog = $this->dataBlog($page, 15);
         if ($dataBlog === null) {
             abort(404);
@@ -275,12 +287,18 @@ class GhostController extends Controller
             })
             ->implode("\n");
 
+        $selfUrl = $request->url();
+        $language = str_replace('_', '-', (string) config('app.locale', 'en'));
+
         $xml = '<?xml version="1.0" encoding="UTF-8"?>'
-            ."\n".'<rss version="2.0">'
+            ."\n".'<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">'
             ."\n    <channel>"
             ."\n        <title>".$this->xml($channelTitle).'</title>'
             ."\n        <link>".$this->xml($siteUrl).'</link>'
             ."\n        <description>".$this->xml($channelTitle.' feed').'</description>'
+            ."\n        <language>".$this->xml($language).'</language>'
+            ."\n        <lastBuildDate>".$this->xml(now()->toRfc2822String()).'</lastBuildDate>'
+            ."\n        <atom:link href=\"".$this->xml($selfUrl).'" rel="self" type="application/rss+xml"/>'
             .($items !== '' ? "\n{$items}" : '')
             ."\n    </channel>"
             ."\n</rss>\n";
@@ -356,11 +374,14 @@ class GhostController extends Controller
             foreach ($domainsToClear as $domainToClear) {
                 $cacheManager->purgeDataBlogCache($domainToClear);
                 $cacheCleared[] = "{$domainToClear}:dataBlog_pagination";
-                Log::info("Cleared dataBlog cache for webhook: {$nameWebhook}", [
-                    'domain' => $domainToClear,
-                ]);
             }
         }
+
+        Log::info('Ghost webhook invalidated cached content.', [
+            'webhook' => $nameWebhook,
+            'domains' => $domainsToClear,
+            'cache_cleared' => $cacheCleared,
+        ]);
 
         Event::dispatch(new GhostPostUpdated(
             $nameWebhook ?? 'post.updated',
@@ -375,6 +396,55 @@ class GhostController extends Controller
             'cache_cleared' => $cacheCleared,
         ]);
 
+    }
+
+    /**
+     * The image used when a post carries no feature image of its own.
+     *
+     * Kept as a template so applications are not tied to this package's asset
+     * layout: {domain} is the hostname, {domain_key} its directory-safe form.
+     */
+    private function defaultSeoImage(string $domain): string
+    {
+        return $this->expandDomainPlaceholders(
+            (string) config(
+                'multidomain-ghost.seo.default_image',
+                'https://{domain}/img/{domain_key}/apple-touch-icon.png',
+            ),
+            $domain,
+        );
+    }
+
+    private function expandDomainPlaceholders(string $template, string $domain): string
+    {
+        return strtr($template, [
+            '{domain}' => $domain,
+            '{domain_key}' => str_replace('.', '_', $domain),
+        ]);
+    }
+
+    /**
+     * Read the requested listing page.
+     *
+     * Without an upper bound every distinct ?page= value mints a new cache entry
+     * and a new Ghost request, so an unbounded crawl becomes an amplification
+     * vector against the CMS. Anything past `max_blog_page` is not a page of this
+     * blog, so it 404s: serving the last page under a different ?page= value would
+     * publish the same listing under unlimited URLs.
+     *
+     * A junk or negative value is treated as the first page instead - it maps onto
+     * an entry that already exists, so it carries no amplification.
+     */
+    private function requestedPage(Request $request): int
+    {
+        $page = max(1, (int) $request->integer('page', 1));
+        $max = max(1, (int) config('multidomain-ghost.max_blog_page', 200));
+
+        if ($page > $max) {
+            abort(404);
+        }
+
+        return $page;
     }
 
     private function canonicalUrl(Request $request): string

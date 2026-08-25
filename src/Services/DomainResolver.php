@@ -11,12 +11,14 @@ class DomainResolver
 {
     private ?string $explicitDomain = null;
 
+    private ?string $resolvedDomain = null;
+
     /**
      * Resolve the current domain from request, CLI arguments, or environment.
      */
     public function resolve(?Request $request = null): string
     {
-        return $this->determineDomain($request);
+        return $this->resolvedDomain ??= $this->determineDomain($request);
     }
 
     private function determineDomain(?Request $request = null): string
@@ -27,31 +29,43 @@ class DomainResolver
         }
 
         // 2. Use the opt-in multi-domain Application when the consumer enabled it.
+        //    Its value already drives the storage path and config overrides, so it
+        //    stays authoritative to keep every domain-scoped decision consistent.
         if (method_exists(app(), 'domain')) {
             $applicationDomain = app()->domain();
 
             if (is_string($applicationDomain) && $applicationDomain !== '') {
-                return DomainName::normalize($applicationDomain);
+                $normalized = DomainName::normalize($applicationDomain);
+
+                if ($normalized !== '') {
+                    return $normalized;
+                }
             }
         }
 
-        // 3. Check CLI arguments and web server globals.
+        // 3. Prefer the active HTTP request. Its host has been through Laravel's
+        //    host validation and honours trusted proxies, unlike the raw globals.
+        $request ??= (app()->bound('request') ? request() : null);
+
+        if ($request instanceof Request) {
+            $host = DomainName::normalize((string) $request->getHost());
+
+            if ($host !== '' && ! $this->isLoopback($host)) {
+                return $host;
+            }
+        }
+
+        // 4. Fall back to CLI arguments and web server globals.
         $globalDomain = DomainName::fromGlobals($_SERVER);
-        if ($globalDomain !== null && ! in_array($globalDomain, ['localhost', '127.0.0.1'], true)) {
+        if ($globalDomain !== null && ! $this->isLoopback($globalDomain)) {
             return $globalDomain;
         }
 
-        // 4. Resolve from passed Request or active HTTP Request
-        $request ??= (app()->bound('request') ? request() : null);
-
-        if ($request && method_exists($request, 'getHost')) {
-            $host = $request->getHost();
-            if (filled($host)) {
-                return DomainName::normalize((string) $host);
-            }
+        // 5. Accept a loopback host rather than inventing one.
+        if ($request instanceof Request && DomainName::normalize((string) $request->getHost()) !== '') {
+            return DomainName::normalize((string) $request->getHost());
         }
 
-        // 5. Fallback to server host even if localhost.
         if ($globalDomain !== null) {
             return $globalDomain;
         }
@@ -60,7 +74,12 @@ class DomainResolver
         $appUrl = (string) config('app.url', 'localhost');
         $parsedHost = parse_url($appUrl, PHP_URL_HOST);
 
-        return DomainName::normalize($parsedHost ?: 'localhost');
+        return DomainName::normalize((string) ($parsedHost ?: 'localhost')) ?: 'localhost';
+    }
+
+    private function isLoopback(string $domain): bool
+    {
+        return in_array($domain, ['localhost', '127.0.0.1'], true);
     }
 
     /**
@@ -69,6 +88,7 @@ class DomainResolver
     public function setDomain(string $domain): self
     {
         $this->explicitDomain = DomainName::normalize($domain);
+        $this->resolvedDomain = null;
 
         return $this;
     }
@@ -119,5 +139,6 @@ class DomainResolver
     public function reset(): void
     {
         $this->explicitDomain = null;
+        $this->resolvedDomain = null;
     }
 }

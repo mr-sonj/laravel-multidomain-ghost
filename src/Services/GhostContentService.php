@@ -4,16 +4,26 @@ declare(strict_types=1);
 
 namespace MrSonj\MultiDomainGhost\Services;
 
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Contracts\Cache\Repository;
 use MrSonj\MultiDomainGhost\Client\GhostClient;
+use MrSonj\MultiDomainGhost\Support\GhostCache;
 
 class GhostContentService
 {
+    /**
+     * Marks "Ghost answered, and this URL has no content". Cached separately from a
+     * real result because Cache::remember() can never store a null: without this
+     * sentinel every request for an unknown URL reaches Ghost again.
+     */
+    private const MISS = '__multidomain_ghost_miss__';
+
     private GhostClient $ghost;
 
     private bool $isLocal;
 
     private string $domain;
+
+    private ?string $blogGeneration = null;
 
     public function __construct(GhostClient $ghost, DomainResolver $domainResolver)
     {
@@ -32,9 +42,18 @@ class GhostContentService
         return $this->isLocal;
     }
 
+    /**
+     * The store Ghost content is cached in. Shared across domains on purpose so
+     * that invalidation never depends on which domain is currently being served.
+     */
+    public function cache(): Repository
+    {
+        return GhostCache::repository();
+    }
+
     private function cacheTtl(): int
     {
-        return (int) config('multidomain-ghost.cache_ttl', 60 * 60 * 24 * 30);
+        return GhostCache::ttl();
     }
 
     public function dataBlog(int $page = 1, int $limit = 15): ?array
@@ -43,7 +62,7 @@ class GhostContentService
             return $this->ghost->list('tag:-hash-page', null, $page, $limit, include: 'tags,authors');
         }
 
-        return Cache::remember($this->blogCacheKey($page, $limit), $this->cacheTtl(), function () use ($page, $limit) {
+        return $this->cache()->remember($this->blogCacheKey($page, $limit), $this->cacheTtl(), function () use ($page, $limit) {
             return $this->ghost->list('tag:-hash-page', null, $page, $limit, include: 'tags,authors');
         });
     }
@@ -54,7 +73,7 @@ class GhostContentService
             $content = $this->getPostByCanonicalUrl($variant);
             if ($content !== null) {
                 if (! $this->isLocal && $variant !== $canonicalUrl) {
-                    Cache::put($this->postCacheKey($canonicalUrl), $content, $this->cacheTtl());
+                    $this->cache()->put($this->postCacheKey($canonicalUrl), $content, $this->cacheTtl());
                 }
 
                 return $content;
@@ -67,7 +86,7 @@ class GhostContentService
     public function forgetPostCache(string $canonicalUrl): void
     {
         foreach ($this->canonicalUrlVariants($canonicalUrl) as $variant) {
-            Cache::forget($this->postCacheKey($variant));
+            $this->cache()->forget($this->postCacheKey($variant));
         }
     }
 
@@ -90,9 +109,22 @@ class GhostContentService
             return $this->ghost->content($canonicalUrl);
         }
 
-        return Cache::remember($this->postCacheKey($canonicalUrl), $this->cacheTtl(), function () use ($canonicalUrl) {
-            return $this->ghost->content($canonicalUrl);
-        });
+        $key = $this->postCacheKey($canonicalUrl);
+        $cached = $this->cache()->get($key);
+
+        if ($cached !== null) {
+            return $cached === self::MISS ? null : $cached;
+        }
+
+        $content = $this->ghost->content($canonicalUrl);
+
+        $this->cache()->put(
+            $key,
+            $content ?? self::MISS,
+            $content === null ? GhostCache::missTtl() : $this->cacheTtl(),
+        );
+
+        return $content;
     }
 
     private function alternateTrailingSlashUrl(string $canonicalUrl): string
@@ -121,26 +153,49 @@ class GhostContentService
             return $this->ghost->slugs();
         }
 
-        return Cache::remember($this->slugsCacheKey(), $this->cacheTtl(), function () {
-            return $this->ghost->slugs();
-        });
+        $key = $this->slugsCacheKey();
+        $cached = $this->cache()->get($key);
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $slugs = $this->ghost->slugs();
+
+        // An empty list is a legitimate answer, but it is also what a mistyped
+        // domain tag or a revoked content key produces. Expire it quickly so the
+        // site recovers on its own instead of serving an empty sitemap for a month.
+        $this->cache()->put(
+            $key,
+            $slugs,
+            $slugs === [] ? GhostCache::emptyTtl() : $this->cacheTtl(),
+        );
+
+        return $slugs;
     }
 
     public function forgetSlugsCache(): void
     {
-        Cache::forget($this->slugsCacheKey());
+        $this->cache()->forget($this->slugsCacheKey());
     }
 
     public function slugsCacheKey(): string
     {
-        return "ghost:{$this->domain}:slugs";
+        return self::slugsCacheKeyFor($this->domain);
+    }
+
+    public static function slugsCacheKeyFor(string $domain): string
+    {
+        return "ghost:{$domain}:slugs";
     }
 
     public function blogCacheKey(int $page, int $limit): string
     {
-        $generation = Cache::get($this->blogGenerationKey($this->domain), '1');
+        // Read once per request: every listing page of a request shares one
+        // generation, so re-reading it per key is a wasted round trip.
+        $this->blogGeneration ??= (string) $this->cache()->get($this->blogGenerationKey($this->domain), '1');
 
-        return "ghost:{$this->domain}:dataBlog:{$generation}:{$page}:{$limit}";
+        return "ghost:{$this->domain}:dataBlog:{$this->blogGeneration}:{$page}:{$limit}";
     }
 
     public function blogGenerationKey(string $domain): string

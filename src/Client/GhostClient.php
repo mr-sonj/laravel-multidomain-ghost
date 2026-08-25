@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace MrSonj\MultiDomainGhost\Client;
 
 use Firebase\JWT\JWT;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use MrSonj\MultiDomainGhost\Contracts\ContentTransformerInterface;
 use MrSonj\MultiDomainGhost\Services\DomainResolver;
 
@@ -88,8 +91,8 @@ class GhostClient
         if ($this->usesAdminApi) {
             $query['formats'] = 'html';
         }
-        $response = $this->request()->get($this->resourceEndpointFor($resource), $query);
-        if (! $response->ok()) {
+        $response = $this->fetch($this->resourceEndpointFor($resource), $query);
+        if ($response === null) {
             return null;
         }
         $list = $response->json();
@@ -97,7 +100,7 @@ class GhostClient
             return $list;
         }
         foreach ($list[$resource] ?? [] as $key => $content) {
-            $list[$resource][$key] = $this->mod_content($content);
+            $list[$resource][$key] = $this->modContent($content);
         }
 
         return $list;
@@ -114,30 +117,53 @@ class GhostClient
             $query['key'] = $this->configValue('content_key');
         }
         foreach (['posts', 'pages'] as $resource) {
-            $response = $this->request()->get(
+            $response = $this->fetch(
                 $this->resourceEndpointFor($resource),
                 array_filter($query, fn ($value) => $value !== null),
             );
-            if ($response->ok() && ! empty($response->json($resource))) {
-                return $this->mod_content($response->json($resource.'.0'));
+            if ($response !== null && ! empty($response->json($resource))) {
+                return $this->modContent($response->json($resource.'.0'));
             }
         }
 
         return null;
     }
 
+    /**
+     * @deprecated Use modContent(). Kept so existing integrations keep working.
+     */
     public function mod_content(array $content): array
+    {
+        return $this->modContent($content);
+    }
+
+    /**
+     * @deprecated Use findPrimaryTag(). Kept so existing integrations keep working.
+     */
+    public function find_primary_tag(array $content): ?array
+    {
+        return $this->findPrimaryTag($content);
+    }
+
+    /**
+     * @deprecated Use urlToPath(). Kept so existing integrations keep working.
+     */
+    public function url_to_path(string $url): string|false
+    {
+        return $this->urlToPath($url);
+    }
+
+    /**
+     * Apply the package's core normalization to a raw Ghost payload.
+     */
+    public function modContent(array $content): array
     {
         $content['domain'] = $this->domain;
         if (! empty($content['canonical_url'])) {
-            $content['path'] = $this->url_to_path($content['canonical_url']);
+            $content['path'] = $this->urlToPath($content['canonical_url']);
             $content['url'] = $content['canonical_url'];
         }
-        $content['schema'] = false;
-        if (! empty($content['codeinjection_head']) && str_contains($content['codeinjection_head'], '<script type="application/ld+json">')) {
-            $content['schema'] = true;
-        }
-        $content['primary_tag'] = $this->find_primary_tag($content);
+        $content['primary_tag'] = $this->findPrimaryTag($content);
         if ($content['primary_tag'] !== null) {
             foreach (['codeinjection_head', 'codeinjection_foot'] as $key) {
                 if (! empty($content['primary_tag'][$key])) {
@@ -146,10 +172,19 @@ class GhostClient
             }
         }
 
+        // Detected after the tag has been merged in: schema shared across a domain
+        // normally lives on the primary tag, and views use this flag to decide
+        // whether to emit their own JSON-LD.
+        $content['schema'] = ! empty($content['codeinjection_head'])
+            && str_contains($content['codeinjection_head'], '<script type="application/ld+json">');
+
         return $this->contentTransformer?->transform($content, $this->domain) ?? $content;
     }
 
-    public function find_primary_tag(array $content): ?array
+    /**
+     * The tag that scopes this content to the current domain, if present.
+     */
+    public function findPrimaryTag(array $content): ?array
     {
         foreach ($content['tags'] ?? [] as $tag) {
             if (($tag['slug'] ?? null) === $this->domainTag) {
@@ -160,13 +195,16 @@ class GhostClient
         return null;
     }
 
-    public function url_to_path(string $url): string|false
+    public function urlToPath(string $url): string|false
     {
         $path = parse_url($url, PHP_URL_PATH);
 
         return $path ? ltrim(urldecode($path), '/') : false;
     }
 
+    /**
+     * @internal Mints a short-lived Ghost Admin API JWT. Not part of the public API.
+     */
     public function get_admin_token(?string $apiKey): string
     {
         if ($apiKey === null || ! str_contains($apiKey, ':')) {
@@ -190,6 +228,40 @@ class GhostClient
         ]);
     }
 
+    /**
+     * Perform a Ghost request, turning any upstream failure into a null result.
+     *
+     * A CMS outage must degrade to "no content" - a 404 or a stale cache entry -
+     * rather than take every domain in the application down with a 500.
+     */
+    private function fetch(string $endpoint, array $query): ?Response
+    {
+        try {
+            $response = $this->request()->get($endpoint, $query);
+        } catch (ConnectionException $exception) {
+            $this->logFailure($endpoint, $exception->getMessage());
+
+            return null;
+        }
+
+        if (! $response->ok()) {
+            $this->logFailure($endpoint, 'HTTP '.$response->status());
+
+            return null;
+        }
+
+        return $response;
+    }
+
+    private function logFailure(string $endpoint, string $reason): void
+    {
+        Log::warning('Ghost request failed.', [
+            'domain' => $this->domain,
+            'endpoint' => $endpoint,
+            'reason' => $reason,
+        ]);
+    }
+
     private function request(): PendingRequest
     {
         $this->ensureConfigured();
@@ -198,8 +270,9 @@ class GhostClient
             ->withHeaders(['Accept-Version' => (string) $this->configValue('api_version', 'v6.0')])
             ->timeout((int) $this->configValue('timeout', 10))
             ->retry(
-                (int) $this->configValue('retry_times', 2),
-                (int) $this->configValue('retry_sleep', 200),
+                max(1, (int) $this->configValue('retry_times', 2)),
+                max(0, (int) $this->configValue('retry_sleep', 200)),
+                throw: false,
             );
 
         if (! (bool) $this->configValue('verify_ssl', true)) {

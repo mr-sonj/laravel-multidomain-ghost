@@ -159,11 +159,15 @@ php artisan schedule:run --domain=example.com
 | Command | Feature |
 | --- | --- |
 | `domain --domain=example.com` | Prints active domain |
-| `domain:list` | Lists domains, Laravel key, Ghost tag slug, storage/config status |
+| `domain:list` | Lists domains, Laravel key, Ghost tag slug, storage/config status, effective cache prefix and resolved enricher |
 | `domain:add example.com` | Registers domain and scaffolds storage/config/view/CSS |
 | `domain:remove example.com` | Unregisters domain, preserves config and storage by default |
 | `domain:remove example.com --force` | Unregisters and deletes domain storage directory |
 | `ghost:domain-add` | Alias for `domain:add` |
+| `domain:optimize` | Builds config/route/event caches for every registered domain |
+| `domain:optimize --clear` | Clears those caches per domain |
+| `domain:optimize --only=example.com` | Limits the run to one domain |
+| `domain:optimize --pretend` | Prints the commands without running them |
 | `ghost:domain-list` | Alias for `domain:list` |
 
 `domain:add` creates:
@@ -173,8 +177,12 @@ php artisan schedule:run --domain=example.com
 - `resources/views/{domain_com}`.
 - `resources/css/{domain_com}.css`.
 - Entry in `config/domain.php`.
+- A route group for the apex domain plus a 301 redirect group for its `www.` host.
 
 The command does not create `.env.{domain}` files.
+
+`domain:optimize` exists because cached config, routes and events are stored per domain:
+a bare `php artisan config:cache` writes a file no domain request reads.
 
 Source:
 
@@ -183,6 +191,7 @@ Source:
 - [`src/Console/Commands/GhostDomainListCommand.php`](src/Console/Commands/GhostDomainListCommand.php)
 - [`src/Console/Commands/GhostDomainAddCommand.php`](src/Console/Commands/GhostDomainAddCommand.php)
 - [`src/Console/Commands/DomainRemoveCommand.php`](src/Console/Commands/DomainRemoveCommand.php)
+- [`src/Console/Commands/DomainOptimizeCommand.php`](src/Console/Commands/DomainOptimizeCommand.php)
 
 ## 6. Queue Domain Propagation
 
@@ -202,7 +211,7 @@ Custom queue provider:
 - Passes this option down to child `queue:work` processes.
 - Preserves standard Laravel listener options.
 
-Consumers must replace Laravel's `QueueServiceProvider` with the package provider in `config/app.php` if using `queue:listen`.
+Consumers must replace Laravel's `QueueServiceProvider` with the package provider in `config/app.php` if using `queue:listen`. The Laravel 11+ skeleton ships without a `providers` key in `config/app.php`; add one built from `ServiceProvider::defaultProviders()->replace([...])`.
 
 Source:
 
@@ -248,6 +257,9 @@ Package automatically generates appropriate posts/pages endpoints for Content or
 - Retry count and retry sleep.
 - SSL verification enabled by default.
 - Validates required URL/key before sending HTTP requests.
+- Upstream failures (error status or connection error) are logged and returned as no
+  content rather than raised. A CMS outage degrades to 404s and empty listings instead of
+  taking every domain down with a 500.
 
 ### 7.5 Core Content Normalization
 
@@ -256,9 +268,10 @@ After receiving content:
 - Adds `domain`.
 - Maps `canonical_url` to `url`.
 - Generates `path`.
-- Detects custom JSON-LD schema in `codeinjection_head`.
 - Finds primary domain tag.
 - Merges `codeinjection_head` and `codeinjection_foot` from primary domain tag.
+- Detects custom JSON-LD schema in the merged `codeinjection_head`, so schema carried by
+  the domain tag is recognised and views do not emit a second JSON-LD block.
 - Executes application content transformer after core normalization.
 
 Core does not inject Alpine directives, rewrite titles, or strip brand referral parameters.
@@ -271,6 +284,7 @@ Source:
 Tests:
 
 - [`tests/Unit/GhostClientTest.php`](tests/Unit/GhostClientTest.php)
+- [`tests/Unit/GhostClientErrorHandlingTest.php`](tests/Unit/GhostClientErrorHandlingTest.php)
 
 ## 8. Ghost Content Service and Cache
 
@@ -296,15 +310,27 @@ Tests:
 - Non-local: uses `GHOST_CACHE_TTL`.
 - Cache keys contain domain.
 - Blog cache uses a generation key to invalidate pagination without scanning Redis keys.
+- Ghost content lives in a dedicated store shared by every domain, derived from the
+  application's default store with a fixed prefix. Keys already carry their domain, so
+  invalidation does not depend on which domain is currently being served - a webhook
+  arriving on one domain can purge any other.
+- "Not found" answers are cached for `cache.miss_ttl`, so an unknown URL cannot reach
+  Ghost on every request.
+- Successful-but-empty responses are cached for `cache.empty_ttl`, so a mistyped domain
+  tag cannot freeze an empty sitemap for the full TTL.
 
 Source:
 
 - [`src/Services/GhostContentService.php`](src/Services/GhostContentService.php)
 - [`src/Services/GhostCacheManager.php`](src/Services/GhostCacheManager.php)
+- [`src/Support/GhostCache.php`](src/Support/GhostCache.php)
 
 Tests:
 
 - [`tests/Unit/GhostContentServiceTest.php`](tests/Unit/GhostContentServiceTest.php)
+- [`tests/Unit/GhostNegativeCacheTest.php`](tests/Unit/GhostNegativeCacheTest.php)
+- [`tests/Unit/GhostEmptyResultCacheTest.php`](tests/Unit/GhostEmptyResultCacheTest.php)
+- [`tests/Feature/GhostCacheInvalidationTest.php`](tests/Feature/GhostCacheInvalidationTest.php)
 
 ## 9. Ghost Controller
 

@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace MrSonj\MultiDomainGhost\Services;
 
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use MrSonj\MultiDomainGhost\Support\GhostCache;
 
+/**
+ * Invalidates Ghost content caches, including for domains other than the one
+ * currently being served - which is the normal case for a webhook.
+ */
 class GhostCacheManager
 {
     public function __construct(
@@ -16,17 +19,14 @@ class GhostCacheManager
 
     /**
      * Purge post cache for a canonical URL and all its variants.
+     *
+     * @return array<int, string> the canonical URL variants that were purged
      */
     public function purgePostCache(string $canonicalUrl): array
     {
         $variants = $this->contentService->canonicalUrlVariants($canonicalUrl);
 
-        $host = parse_url($canonicalUrl, PHP_URL_HOST);
-        $domain = $host ? strtolower(preg_replace('/:\d+$/', '', (string) $host)) : null;
-
-        $this->withDomainCachePrefix($domain, function () use ($canonicalUrl) {
-            $this->contentService->forgetPostCache($canonicalUrl);
-        });
+        $this->contentService->forgetPostCache($canonicalUrl);
 
         return $variants;
     }
@@ -36,47 +36,18 @@ class GhostCacheManager
      */
     public function purgeSlugsCache(string $domain): void
     {
-        $this->withDomainCachePrefix($domain, function () use ($domain) {
-            Cache::forget("ghost:{$domain}:slugs");
-        });
-    }
-
-    public function purgeDataBlogCache(string $domain): void
-    {
-        $this->withDomainCachePrefix($domain, function () use ($domain) {
-            Cache::forever(
-                $this->contentService->blogGenerationKey($domain),
-                Str::uuid()->toString(),
-            );
-        });
-
-        Log::info('Rotated Ghost blog cache generation.', [
-            'domain' => $domain,
-        ]);
+        GhostCache::repository()->forget(GhostContentService::slugsCacheKeyFor($domain));
     }
 
     /**
-     * Execute a callback under the target domain's cache prefix.
+     * Rotate the blog listing generation for a domain, invalidating every cached
+     * page of its pagination at once without scanning the cache store for keys.
      */
-    private function withDomainCachePrefix(?string $domain, \Closure $callback): mixed
+    public function purgeDataBlogCache(string $domain): void
     {
-        if (empty($domain)) {
-            return $callback();
-        }
-
-        $dirKey = str_replace('.', '_', strtolower($domain));
-        $domainPrefix = config("domains.{$dirKey}.cache.prefix")
-            ?? config("domains.{$dirKey}.cache_prefix")
-            ?? "{$dirKey}_cache";
-
-        $originalPrefix = config('cache.prefix');
-
-        try {
-            config(['cache.prefix' => $domainPrefix]);
-
-            return $callback();
-        } finally {
-            config(['cache.prefix' => $originalPrefix]);
-        }
+        GhostCache::repository()->forever(
+            $this->contentService->blogGenerationKey($domain),
+            Str::uuid()->toString(),
+        );
     }
 }

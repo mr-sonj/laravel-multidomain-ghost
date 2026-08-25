@@ -13,7 +13,25 @@ return [
     'retry_times' => (int) env('GHOST_RETRY_TIMES', 2),
     'retry_sleep' => (int) env('GHOST_RETRY_SLEEP', 200),
     'cache_ttl' => (int) env('GHOST_CACHE_TTL', 60 * 60 * 24 * 30),
+    'cache' => [
+        // Leave null to let the package provision a dedicated store derived from
+        // your default one. Ghost keys already contain their domain, so this store
+        // is deliberately shared across domains: that is what lets a webhook
+        // arriving on one domain invalidate any other domain.
+        'store' => env('GHOST_CACHE_STORE'),
+        'prefix' => env('GHOST_CACHE_PREFIX', 'multidomain_ghost'),
+        'ttl' => (int) env('GHOST_CACHE_TTL', 60 * 60 * 24 * 30),
+        // Remembering "not found" keeps unknown URLs from reaching Ghost on every hit.
+        'miss_ttl' => (int) env('GHOST_CACHE_MISS_TTL', 300),
+        // Empty-but-successful responses expire quickly so a mistyped tag cannot
+        // freeze an empty sitemap in place for the full TTL.
+        'empty_ttl' => (int) env('GHOST_CACHE_EMPTY_TTL', 300),
+    ],
     'domain_tag_prefix' => env('GHOST_DOMAIN_TAG_PREFIX', 'hash-'),
+    // Upper bound for ?page= on blog and feed routes. Every distinct page number
+    // is a separate cache entry and a separate Ghost request, so leaving it
+    // unbounded lets a crawler amplify traffic against the CMS.
+    'max_blog_page' => (int) env('GHOST_MAX_BLOG_PAGE', 200),
     'webhook_secret' => env('GHOST_WEBHOOK_SECRET', ''),
     'allow_unsigned_webhooks' => filter_var(
         env('GHOST_ALLOW_UNSIGNED_WEBHOOKS', false),
@@ -35,8 +53,21 @@ return [
         'page' => 'multidomain-ghost::page',
         'blog' => 'multidomain-ghost::blog',
     ],
+    // {domain} and {domain_key} expand to the active hostname and its
+    // directory-safe form (example.com / example_com).
+    'seo' => [
+        'default_image' => env(
+            'GHOST_SEO_DEFAULT_IMAGE',
+            'https://{domain}/img/{domain_key}/apple-touch-icon.png',
+        ),
+    ],
     'robots' => [
         'content_signal' => env('ROBOTS_CONTENT_SIGNAL', ''),
+        'sitemap' => env('GHOST_ROBOTS_SITEMAP', 'https://{domain}/sitemap.xml'),
+        'disallow' => ['/cdn-cgi/'],
+    ],
+    'ads' => [
+        'txt' => env('GHOST_ADS_TXT', ''),
     ],
     'enrichers' => [],
     'transformer' => null,

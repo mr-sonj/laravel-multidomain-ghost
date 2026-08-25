@@ -137,4 +137,45 @@ class GhostClientTest extends TestCase
 
         $this->assertSame('example.com', $content['transformed_for']);
     }
+
+    public function test_schema_injected_through_the_primary_domain_tag_is_detected(): void
+    {
+        $content = (new GhostClient('example.com', false))->mod_content([
+            'canonical_url' => 'https://example.com/a',
+            'codeinjection_head' => '',
+            'tags' => [[
+                'slug' => 'hash-example-com',
+                'codeinjection_head' => '<script type="application/ld+json">{"@type":"Article"}</script>',
+            ]],
+        ]);
+
+        $this->assertTrue(
+            $content['schema'],
+            'JSON-LD carried by the primary domain tag must set the schema flag, otherwise the view emits a second one',
+        );
+    }
+
+    public function test_schema_stays_false_when_no_json_ld_is_present(): void
+    {
+        $content = (new GhostClient('example.com', false))->mod_content([
+            'canonical_url' => 'https://example.com/a',
+            'codeinjection_head' => '<meta name="x" content="y">',
+            'tags' => [['slug' => 'hash-example-com', 'codeinjection_head' => '<style>a{}</style>']],
+        ]);
+
+        $this->assertFalse($content['schema']);
+    }
+
+    public function test_camel_case_api_mirrors_the_legacy_snake_case_methods(): void
+    {
+        $client = new GhostClient('example.com', false);
+        $raw = [
+            'canonical_url' => 'https://example.com/a/b',
+            'tags' => [['slug' => 'hash-example-com', 'name' => '#example.com']],
+        ];
+
+        $this->assertSame($client->mod_content($raw), $client->modContent($raw));
+        $this->assertSame($client->find_primary_tag($raw), $client->findPrimaryTag($raw));
+        $this->assertSame('a/b', $client->urlToPath('https://example.com/a/b'));
+    }
 }

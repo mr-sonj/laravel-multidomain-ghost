@@ -6,9 +6,9 @@ namespace MrSonj\MultiDomainGhost;
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Str;
 use MrSonj\MultiDomainGhost\Client\GhostClient;
 use MrSonj\MultiDomainGhost\Console\Commands\DomainCurrentCommand;
+use MrSonj\MultiDomainGhost\Console\Commands\DomainOptimizeCommand;
 use MrSonj\MultiDomainGhost\Console\Commands\DomainRemoveCommand;
 use MrSonj\MultiDomainGhost\Console\Commands\GhostDomainAddCommand;
 use MrSonj\MultiDomainGhost\Console\Commands\GhostDomainListCommand;
@@ -19,6 +19,8 @@ use MrSonj\MultiDomainGhost\Http\Controllers\GhostController;
 use MrSonj\MultiDomainGhost\Services\DomainResolver;
 use MrSonj\MultiDomainGhost\Services\GhostCacheManager;
 use MrSonj\MultiDomainGhost\Services\GhostContentService;
+use MrSonj\MultiDomainGhost\Support\DomainEnricherLocator;
+use MrSonj\MultiDomainGhost\Support\GhostCache;
 use MrSonj\MultiDomainGhost\Support\NullContentTransformer;
 use MrSonj\MultiDomainGhost\Support\NullEnricher;
 
@@ -50,22 +52,10 @@ class MultiDomainGhostServiceProvider extends ServiceProvider
         $this->app->scoped(GhostCacheManager::class);
 
         $this->app->bindIf(DomainEnricherInterface::class, function ($app) {
-            $resolver = $app->make(DomainResolver::class);
-            $domain = $resolver->resolve();
-            $dirKey = $resolver->dirKey();
+            $domain = $app->make(DomainResolver::class)->resolve();
+            $enricher = DomainEnricherLocator::resolveClass($domain);
 
-            $enrichers = (array) config('multidomain-ghost.enrichers', []);
-            if (isset($enrichers[$domain]) && class_exists((string) $enrichers[$domain])) {
-                return $app->make($enrichers[$domain]);
-            }
-
-            $studlyDomain = Str::studly($dirKey);
-            $conventionClass = "App\\Services\\{$dirKey}\\{$studlyDomain}Enricher";
-            if (class_exists($conventionClass)) {
-                return $app->make($conventionClass);
-            }
-
-            return new NullEnricher;
+            return $enricher !== null ? $app->make($enricher) : new NullEnricher;
         });
 
         $this->app->bindIf(ContentTransformerInterface::class, function ($app) {
@@ -85,6 +75,7 @@ class MultiDomainGhostServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 DomainCurrentCommand::class,
+                DomainOptimizeCommand::class,
                 DomainRemoveCommand::class,
                 GhostDomainAddCommand::class,
                 GhostDomainListCommand::class,
@@ -95,6 +86,12 @@ class MultiDomainGhostServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Declared here rather than lazily on first use, so that `cache:clear
+        // multidomain-ghost` and anything else reading config/cache.php can see
+        // the store. Booting, not registering: the application's own providers
+        // get to settle `multidomain-ghost.cache.store` first.
+        GhostCache::ensureStoreRegistered();
+
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'multidomain-ghost');
         $this->registerWebhookRoute();
 

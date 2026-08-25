@@ -12,6 +12,7 @@ use MrSonj\MultiDomainGhost\Http\Controllers\GhostController;
 use MrSonj\MultiDomainGhost\Services\GhostContentService;
 use MrSonj\MultiDomainGhost\Support\NullEnricher;
 use MrSonj\MultiDomainGhost\Tests\TestCase;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class GhostControllerTest extends TestCase
 {
@@ -211,12 +212,134 @@ class GhostControllerTest extends TestCase
         $response = $controller->feed($request);
 
         $this->assertSame('application/rss+xml; charset=UTF-8', $response->headers->get('Content-Type'));
-        $this->assertStringContainsString('<rss version="2.0">', $response->getContent());
+        $this->assertStringContainsString('<rss version="2.0"', $response->getContent());
         $this->assertStringContainsString('<title>Example &amp; Post</title>', $response->getContent());
         $this->assertStringContainsString(
             '<link>https://example.com/post?source=feed&amp;lang=en</link>',
             $response->getContent(),
         );
+    }
+
+    public function test_feed_declares_the_elements_readers_expect(): void
+    {
+        $content = $this->createMock(GhostContentService::class);
+        $content->method('domain')->willReturn('example.com');
+        $content->method('dataBlog')->willReturn(['posts' => [[
+            'canonical_url' => 'https://example.com/post',
+            'title' => 'A post',
+            'published_at' => '2026-01-02T03:04:05.000Z',
+        ]]]);
+
+        $xml = (new GhostController(new NullEnricher, $content))
+            ->feed(Request::create('https://example.com/feed'))
+            ->getContent();
+
+        $this->assertStringContainsString('xmlns:atom="http://www.w3.org/2005/Atom"', $xml);
+        $this->assertStringContainsString(
+            '<atom:link href="https://example.com/feed" rel="self" type="application/rss+xml"/>',
+            $xml,
+        );
+        $this->assertStringContainsString('<language>', $xml);
+        $this->assertStringContainsString('<lastBuildDate>', $xml);
+    }
+
+    public function test_blog_404s_on_an_out_of_range_page_number(): void
+    {
+        $this->app['config']->set('multidomain-ghost.max_blog_page', 50);
+
+        $requestedPages = [];
+        $content = $this->createMock(GhostContentService::class);
+        $content->method('domain')->willReturn('example.com');
+        $content->method('getPost')->willReturn(null);
+        $content->method('dataBlog')->willReturnCallback(function (int $page) use (&$requestedPages) {
+            $requestedPages[] = $page;
+
+            return ['posts' => []];
+        });
+
+        $request = Request::create('https://example.com/blog?page=999999');
+        $route = new RoutingRoute(['GET'], '/blog', fn () => null);
+        $route->bind($request);
+        $request->setRouteResolver(static fn () => $route);
+
+        $this->expectException(NotFoundHttpException::class);
+
+        try {
+            (new GhostController(new NullEnricher, $content))->blog($request);
+        } finally {
+            $this->assertSame([], $requestedPages, 'blog() must not reach Ghost for an out-of-range page');
+        }
+    }
+
+    public function test_blog_serves_a_page_inside_the_supported_range(): void
+    {
+        $this->app['config']->set('multidomain-ghost.max_blog_page', 50);
+
+        $requestedPages = [];
+        $content = $this->createMock(GhostContentService::class);
+        $content->method('domain')->willReturn('example.com');
+        $content->method('getPost')->willReturn(null);
+        $content->method('dataBlog')->willReturnCallback(function (int $page) use (&$requestedPages) {
+            $requestedPages[] = $page;
+
+            return ['posts' => []];
+        });
+
+        $request = Request::create('https://example.com/blog?page=50');
+        $route = new RoutingRoute(['GET'], '/blog', fn () => null);
+        $route->bind($request);
+        $request->setRouteResolver(static fn () => $route);
+
+        $view = (new GhostController(new NullEnricher, $content))->blog($request);
+
+        $this->assertSame([50], $requestedPages);
+        $this->assertSame(50, $view->getData()['page']);
+    }
+
+    public function test_blog_treats_a_junk_page_value_as_the_first_page(): void
+    {
+        $requestedPages = [];
+        $content = $this->createMock(GhostContentService::class);
+        $content->method('domain')->willReturn('example.com');
+        $content->method('getPost')->willReturn(null);
+        $content->method('dataBlog')->willReturnCallback(function (int $page) use (&$requestedPages) {
+            $requestedPages[] = $page;
+
+            return ['posts' => []];
+        });
+
+        $request = Request::create('https://example.com/blog?page=-3');
+        $route = new RoutingRoute(['GET'], '/blog', fn () => null);
+        $route->bind($request);
+        $request->setRouteResolver(static fn () => $route);
+
+        $view = (new GhostController(new NullEnricher, $content))->blog($request);
+
+        $this->assertSame([1], $requestedPages);
+        $this->assertSame(1, $view->getData()['page']);
+    }
+
+    public function test_feed_data_404s_on_an_out_of_range_page_number(): void
+    {
+        $this->app['config']->set('multidomain-ghost.max_blog_page', 50);
+
+        $requestedPages = [];
+        $content = $this->createMock(GhostContentService::class);
+        $content->method('domain')->willReturn('example.com');
+        $content->method('dataBlog')->willReturnCallback(function (int $page) use (&$requestedPages) {
+            $requestedPages[] = $page;
+
+            return ['posts' => []];
+        });
+
+        $this->expectException(NotFoundHttpException::class);
+
+        try {
+            (new GhostController(new NullEnricher, $content))
+                ->feedData(Request::create('/feed', 'GET', ['page' => 999999]));
+        } finally {
+            $this->assertSame([], $requestedPages, 'feedData() must not reach Ghost for an out-of-range page');
+        }
     }
 
     public function test_blog_passes_post_listing_data_to_the_fallback_view(): void
