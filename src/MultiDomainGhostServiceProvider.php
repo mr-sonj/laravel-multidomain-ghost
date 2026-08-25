@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MrSonj\MultiDomainGhost;
 
+use Closure;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use MrSonj\MultiDomainGhost\Client\GhostClient;
@@ -16,6 +17,7 @@ use MrSonj\MultiDomainGhost\Console\Commands\GhostInstallCommand;
 use MrSonj\MultiDomainGhost\Contracts\ContentTransformerInterface;
 use MrSonj\MultiDomainGhost\Contracts\DomainEnricherInterface;
 use MrSonj\MultiDomainGhost\Http\Controllers\GhostWebhookController;
+use MrSonj\MultiDomainGhost\Routing\GhostRouteRegistrar;
 use MrSonj\MultiDomainGhost\Services\DomainResolver;
 use MrSonj\MultiDomainGhost\Services\GhostCacheManager;
 use MrSonj\MultiDomainGhost\Services\GhostContentService;
@@ -93,12 +95,30 @@ class MultiDomainGhostServiceProvider extends ServiceProvider
         GhostCache::ensureStoreRegistered();
 
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'multidomain-ghost');
+        $this->registerRouteMacro();
+        $this->registerDomainRoutes();
         $this->registerWebhookRoute();
 
         if ($this->app->runningInConsole()) {
             $this->publishes([
                 __DIR__.'/../config/multidomain-ghost.php' => config_path('multidomain-ghost.php'),
             ], 'multidomain-ghost-config');
+        }
+    }
+
+    private function registerRouteMacro(): void
+    {
+        Route::macro('ghostDomain', function (string $domain, ?Closure $routes = null) {
+            GhostRouteRegistrar::registerDomain($domain, $routes);
+        });
+    }
+
+    private function registerDomainRoutes(): void
+    {
+        if ((bool) config('multidomain-ghost.routes.auto_register', true)) {
+            Route::middleware('web')->group(static function (): void {
+                GhostRouteRegistrar::registerAll();
+            });
         }
     }
 

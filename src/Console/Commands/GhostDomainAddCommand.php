@@ -17,7 +17,7 @@ class GhostDomainAddCommand extends Command
 
     protected $aliases = ['ghost:domain-add'];
 
-    protected $description = 'Register a new domain, scaffold storage, config overrides, routes, views, CSS and Vite entries automatically';
+    protected $description = 'Register a new domain, scaffold storage, config overrides, views, CSS and Vite entries automatically';
 
     public function handle(): int
     {
@@ -139,10 +139,7 @@ PHP;
         // 5. Auto-inject CSS entry into vite.config.js
         $this->injectViteConfig($sanitized);
 
-        // 6. Auto-inject Route group into routes/web.php
-        $this->injectWebRoutes($domain, $sanitized);
-
-        // 7. Auto-update local Herd config if present
+        // 6. Auto-update local Herd config if present
         $this->updateHerdConfig($domain);
 
         if (file_exists(base_path(".env.{$domain}"))) {
@@ -294,61 +291,6 @@ BLADE;
         }
 
         $this->warn("Could not identify Vite's input array. Add '{$cssEntry}' manually.");
-    }
-
-    private function injectWebRoutes(string $domain, string $sanitized): void
-    {
-        $routesFile = base_path('routes/web.php');
-        if (! file_exists($routesFile)) {
-            $this->warn('routes/web.php was not found. Domain routes were not generated.');
-
-            return;
-        }
-
-        $content = file_get_contents($routesFile);
-
-        if (str_contains($content, "Route::domain('{$domain}')") || str_contains($content, 'Route::domain("'.$domain.'")')) {
-            $this->line("<comment>! Route group already exists in routes/web.php for:</comment> {$domain}");
-
-            return;
-        }
-
-        $routeNamePrefix = str_replace(['.', '-'], '_', $domain);
-
-        $routeStub = <<<PHP
-
-
-Route::domain('{$domain}')->group(function () {
-    Route::get('/robots.txt', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'robots'])
-        ->name('{$routeNamePrefix}_robots');
-    Route::get('/sitemap.xml', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'sitemap'])
-        ->name('{$routeNamePrefix}_sitemap');
-    Route::get('/feed', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'feed'])
-        ->name('{$routeNamePrefix}_feed');
-    Route::get('/ads.txt', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'ads']);
-
-    Route::get('/', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'page'])
-        ->defaults('viewPath', '{$sanitized}/home')
-        ->name('{$routeNamePrefix}_home');
-
-    Route::get('/blog', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'blog'])
-        ->defaults('viewPath', '{$sanitized}/blog')
-        ->name('{$routeNamePrefix}_blog');
-    Route::get('/blog/{slug}', [\MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class, 'page'])
-        ->defaults('viewPath', '{$sanitized}/post')
-        ->name('{$routeNamePrefix}_post');
-});
-
-// Without this, requests to the www host match no route at all and 404.
-Route::domain('www.{$domain}')->group(function () {
-    Route::get('/{path?}', function (?string \$path = null) {
-        return redirect()->away('https://{$domain}/'.ltrim((string) \$path, '/'), 301);
-    })->where('path', '.*')->name('{$routeNamePrefix}_www_redirect');
-})->middleware(\MrSonj\MultiDomainGhost\Http\Middleware\EnsureRegisteredDomain::class);
-PHP;
-
-        file_put_contents($routesFile, $content.$routeStub);
-        $this->line("<info>✓ Route group injected into routes/web.php for:</info> {$domain}");
     }
 
     private function updateHerdConfig(string $domain): void

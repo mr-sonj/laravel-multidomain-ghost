@@ -73,10 +73,6 @@ class DomainCommandsTest extends TestCase
             $files->get("{$viewDirectory}/home.blade.php"),
         );
         $this->assertStringContainsString(
-            "'blog'",
-            $files->get($this->basePath.'/routes/web.php'),
-        );
-        $this->assertStringContainsString(
             "'resources/css/example_com.css'",
             $files->get($this->basePath.'/vite.config.js'),
         );
@@ -180,14 +176,14 @@ class DomainCommandsTest extends TestCase
             ->assertExitCode(0);
     }
 
-    public function test_domain_add_routes_the_www_host_to_the_apex(): void
+    public function test_domain_add_does_not_mutate_web_routes_file(): void
     {
+        $initialRoutes = (new Filesystem)->get($this->basePath.'/routes/web.php');
+
         $this->artisan('domain:add', ['domain' => 'example.com'])->assertExitCode(0);
 
-        $routes = (new Filesystem)->get($this->basePath.'/routes/web.php');
-
-        $this->assertStringContainsString("Route::domain('www.example.com')", $routes);
-        $this->assertStringContainsString('EnsureRegisteredDomain::class', $routes);
+        $afterRoutes = (new Filesystem)->get($this->basePath.'/routes/web.php');
+        $this->assertSame($initialRoutes, $afterRoutes);
     }
 
     /**
