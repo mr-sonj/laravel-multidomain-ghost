@@ -136,9 +136,12 @@ php artisan optimize --domain=example.com
 
 ```bash
 php artisan domain:list                        # domains, tags, storage and config status
-php artisan domain:remove example.com          # remove domain config override
+php artisan domain:remove example.com          # unregister, clear its caches and remove its config
 php artisan domain:remove example.com --force  # also delete the storage directory
 ```
+
+Generated Ghost routes check this file-backed registry at request time. Removing a domain therefore
+returns 404 even if its generated route block is still present in `routes/web.php`.
 
 ## Ghost API options
 

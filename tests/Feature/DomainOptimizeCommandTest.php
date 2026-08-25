@@ -8,7 +8,7 @@ class DomainOptimizeCommandTest extends TestCase
 {
     public function test_it_plans_a_cache_build_for_every_registered_domain(): void
     {
-        $this->app['config']->set('domains', [
+        $this->setRegisteredDomains([
             'a_com' => [],
             'b_com' => [],
         ]);
@@ -23,7 +23,7 @@ class DomainOptimizeCommandTest extends TestCase
 
     public function test_clear_mode_plans_a_cache_clear_instead(): void
     {
-        $this->app['config']->set('domains', ['a_com' => []]);
+        $this->setRegisteredDomains(['a_com' => []]);
 
         $this->artisan('domain:optimize --clear --pretend')
             ->expectsOutputToContain('optimize:clear --domain=a.com')
@@ -32,7 +32,7 @@ class DomainOptimizeCommandTest extends TestCase
 
     public function test_it_can_be_limited_to_a_single_domain(): void
     {
-        $this->app['config']->set('domains', [
+        $this->setRegisteredDomains([
             'a_com' => [],
             'b_com' => [],
         ]);
@@ -45,7 +45,7 @@ class DomainOptimizeCommandTest extends TestCase
 
     public function test_it_fails_when_no_domains_are_registered(): void
     {
-        $this->app['config']->set('domains', []);
+        $this->setRegisteredDomains([]);
 
         $this->artisan('domain:optimize')->assertExitCode(1);
     }

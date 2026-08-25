@@ -9,6 +9,13 @@ use RuntimeException;
 
 class GhostWebhookControllerTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->setRegisteredDomains(['example_com' => []]);
+    }
+
     public function test_a_webhook_never_builds_the_domain_enricher(): void
     {
         // The enricher for a real domain can reach a third-party API. A webhook
@@ -18,8 +25,6 @@ class GhostWebhookControllerTest extends TestCase
         });
 
         $this->app['config']->set('multidomain-ghost.allow_unsigned_webhooks', true);
-        $this->app['config']->set('domains.example_com', []);
-
         $response = $this->postJson('/webhook/ghost/post', [
             'name' => 'post.published',
             'post' => ['current' => ['canonical_url' => 'https://example.com/a']],
@@ -50,10 +55,9 @@ class GhostWebhookControllerTest extends TestCase
     public function test_it_ignores_a_domain_that_is_not_registered(): void
     {
         $this->app['config']->set('multidomain-ghost.allow_unsigned_webhooks', true);
-        $this->app['config']->set('domains.example_com', []);
-
         $this->postJson('/webhook/ghost/post', [
             'post' => ['current' => ['canonical_url' => 'https://stranger.com/a']],
-        ])->assertJsonPath('message', 'Ignored. Domain not registered in this application.');
+        ])->assertJsonPath('message', 'Ignored. Domain not registered in this application.')
+            ->assertJsonPath('cache_cleared', []);
     }
 }
