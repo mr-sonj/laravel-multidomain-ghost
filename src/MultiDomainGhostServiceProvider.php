@@ -15,7 +15,7 @@ use MrSonj\MultiDomainGhost\Console\Commands\GhostDomainListCommand;
 use MrSonj\MultiDomainGhost\Console\Commands\GhostInstallCommand;
 use MrSonj\MultiDomainGhost\Contracts\ContentTransformerInterface;
 use MrSonj\MultiDomainGhost\Contracts\DomainEnricherInterface;
-use MrSonj\MultiDomainGhost\Http\Controllers\GhostController;
+use MrSonj\MultiDomainGhost\Http\Controllers\GhostWebhookController;
 use MrSonj\MultiDomainGhost\Services\DomainResolver;
 use MrSonj\MultiDomainGhost\Services\GhostCacheManager;
 use MrSonj\MultiDomainGhost\Services\GhostContentService;
@@ -108,7 +108,7 @@ class MultiDomainGhostServiceProvider extends ServiceProvider
 
         if ($webhook['enabled'] ?? true) {
             Route::middleware((array) ($webhook['middleware'] ?? []))
-                ->post((string) ($webhook['uri'] ?? 'webhook/ghost/post'), [GhostController::class, 'postWebhook'])
+                ->post((string) ($webhook['uri'] ?? 'webhook/ghost/post'), GhostWebhookController::class)
                 ->name('multidomain-ghost.webhook');
         }
     }
