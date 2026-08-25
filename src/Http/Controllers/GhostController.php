@@ -13,6 +13,7 @@ use Illuminate\Routing\Controller;
 use MrSonj\MultiDomainGhost\Contracts\DomainEnricherInterface;
 use MrSonj\MultiDomainGhost\Services\GhostCacheManager;
 use MrSonj\MultiDomainGhost\Services\GhostContentService;
+use MrSonj\MultiDomainGhost\Support\Domain;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class GhostController extends Controller
@@ -335,7 +336,7 @@ class GhostController extends Controller
     {
         return strtr($template, [
             '{domain}' => $domain,
-            '{domain_key}' => str_replace('.', '_', $domain),
+            '{domain_key}' => Domain::make($domain)->key(),
         ]);
     }
 

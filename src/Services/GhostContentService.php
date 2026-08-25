@@ -37,13 +37,8 @@ class GhostContentService
         return $this->domain;
     }
 
-    public function cacheEnabled(): bool
-    {
-        return $this->cacheEnabled;
-    }
-
     /**
-     * @deprecated Reads as "caching is off". Use cacheEnabled().
+     * @deprecated Reads as "caching is off".
      */
     public function isLocal(): bool
     {
@@ -66,13 +61,13 @@ class GhostContentService
 
     public function dataBlog(int $page = 1, int $limit = 15): ?array
     {
+        $fetch = fn () => $this->ghost->list('tag:-hash-page', null, $page, $limit, include: 'tags,authors');
+
         if (! $this->cacheEnabled) {
-            return $this->ghost->list('tag:-hash-page', null, $page, $limit, include: 'tags,authors');
+            return $fetch();
         }
 
-        return $this->cache()->remember($this->blogCacheKey($page, $limit), $this->cacheTtl(), function () use ($page, $limit) {
-            return $this->ghost->list('tag:-hash-page', null, $page, $limit, include: 'tags,authors');
-        });
+        return $this->cache()->remember($this->blogCacheKey($page, $limit), $this->cacheTtl(), $fetch);
     }
 
     public function getPost(string $canonicalUrl): ?array

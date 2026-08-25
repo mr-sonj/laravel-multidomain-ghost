@@ -17,6 +17,7 @@ use MrSonj\MultiDomainGhost\Client\GhostClient;
  * @method static string|false urlToPath(string $url)
  * @method static array mod_content(array $content) @deprecated use modContent()
  * @method static ?array find_primary_tag(array $content) @deprecated use findPrimaryTag()
+ * @method static string|false url_to_path(string $url) @deprecated use urlToPath()
  *
  * @see GhostClient
  */

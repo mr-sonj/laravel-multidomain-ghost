@@ -65,11 +65,6 @@ final class Domain implements Stringable
         return 'tag:'.$this->tag();
     }
 
-    public function isValid(): bool
-    {
-        return $this->host !== '';
-    }
-
     public function __toString(): string
     {
         return $this->host;
