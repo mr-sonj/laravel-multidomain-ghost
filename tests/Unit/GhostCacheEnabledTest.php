@@ -69,4 +69,12 @@ class GhostCacheEnabledTest extends TestCase
 
         Http::assertSentCount(2);
     }
+
+    public function test_the_shipped_config_declares_the_ttl_exactly_once(): void
+    {
+        $shipped = require __DIR__.'/../../config/multidomain-ghost.php';
+
+        $this->assertArrayNotHasKey('cache_ttl', $shipped);
+        $this->assertArrayHasKey('ttl', $shipped['cache']);
+    }
 }

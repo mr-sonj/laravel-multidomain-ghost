@@ -12,7 +12,6 @@ return [
     'timeout' => (int) env('GHOST_TIMEOUT', 10),
     'retry_times' => (int) env('GHOST_RETRY_TIMES', 2),
     'retry_sleep' => (int) env('GHOST_RETRY_SLEEP', 200),
-    'cache_ttl' => (int) env('GHOST_CACHE_TTL', 60 * 60 * 24 * 30),
     'cache' => [
         // Leave null to let the package provision a dedicated store derived from
         // your default one. Ghost keys already contain their domain, so this store
