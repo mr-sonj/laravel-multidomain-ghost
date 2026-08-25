@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace MrSonj\MultiDomainGhost\Console\Commands;
 
 use Illuminate\Console\Command;
-use MrSonj\MultiDomainGhost\Services\DomainResolver;
+use MrSonj\MultiDomainGhost\Support\Domain;
 use MrSonj\MultiDomainGhost\Support\DomainEnricherLocator;
 use MrSonj\MultiDomainGhost\Support\DomainRegistry;
 
@@ -32,7 +32,8 @@ class GhostDomainListCommand extends Command
         $stores = [];
 
         foreach ($domains as $domain) {
-            $sanitized = DomainResolver::dirKeyFor($domain);
+            $name = Domain::make($domain);
+            $sanitized = $name->key();
             $cachePrefix = $this->cachePrefixFor($sanitized);
             $prefixes[] = $cachePrefix;
             $stores[$domain] = $this->cacheStoreFor($sanitized);
@@ -40,7 +41,7 @@ class GhostDomainListCommand extends Command
             $rows[] = [
                 $domain,
                 $sanitized,
-                DomainResolver::domainTagSlug($domain),
+                $name->tag(),
                 is_dir(base_path("storage/{$sanitized}")) ? 'Yes' : 'No',
                 file_exists(config_path("domains/{$sanitized}.php")) ? 'Yes' : 'No',
                 $cachePrefix,

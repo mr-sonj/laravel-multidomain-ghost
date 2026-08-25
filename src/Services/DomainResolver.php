@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MrSonj\MultiDomainGhost\Services;
 
 use Illuminate\Http\Request;
+use MrSonj\MultiDomainGhost\Support\Domain;
 use MrSonj\MultiDomainGhost\Support\DomainName;
 
 class DomainResolver
@@ -99,29 +100,7 @@ class DomainResolver
      */
     public function dirKey(?string $domain = null): string
     {
-        return DomainName::dirKey($domain ?? $this->resolve());
-    }
-
-    /**
-     * Get the Ghost CMS domain tag slug.
-     * Convention: dots become hyphens, prefixed with 'hash-'.
-     * e.g. '10mailbox.com' => 'hash-10mailbox-com'
-     */
-    public static function domainTagSlug(string $domain): string
-    {
-        $prefix = config('multidomain-ghost.domain_tag_prefix', 'hash-');
-
-        return $prefix.str_replace('.', '-', DomainName::normalize($domain));
-    }
-
-    public static function normalizeDomain(string $domain): string
-    {
-        return DomainName::normalize($domain);
-    }
-
-    public static function dirKeyFor(string $domain): string
-    {
-        return DomainName::dirKey($domain);
+        return Domain::make($domain ?? $this->resolve())->key();
     }
 
     /**
@@ -130,7 +109,31 @@ class DomainResolver
      */
     public function domainFilter(?string $domain = null): string
     {
-        return 'tag:'.static::domainTagSlug($domain ?? $this->resolve());
+        return Domain::make($domain ?? $this->resolve())->filter();
+    }
+
+    /**
+     * @deprecated Use Domain::make($domain)->tag().
+     */
+    public static function domainTagSlug(string $domain): string
+    {
+        return Domain::make($domain)->tag();
+    }
+
+    /**
+     * @deprecated Use Domain::make($domain)->host().
+     */
+    public static function normalizeDomain(string $domain): string
+    {
+        return Domain::make($domain)->host();
+    }
+
+    /**
+     * @deprecated Use Domain::make($domain)->key().
+     */
+    public static function dirKeyFor(string $domain): string
+    {
+        return Domain::make($domain)->key();
     }
 
     /**

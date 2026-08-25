@@ -11,7 +11,7 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use MrSonj\MultiDomainGhost\Contracts\ContentTransformerInterface;
-use MrSonj\MultiDomainGhost\Services\DomainResolver;
+use MrSonj\MultiDomainGhost\Support\Domain;
 
 class GhostClient
 {
@@ -22,12 +22,15 @@ class GhostClient
         private bool $usesAdminApi,
         private ?ContentTransformerInterface $contentTransformer = null,
     ) {
-        $this->domainTag = DomainResolver::domainTagSlug($domain);
+        $this->domainTag = Domain::make($domain)->tag();
     }
 
+    /**
+     * @deprecated Use Domain::make($domain)->tag().
+     */
     public static function domainTagSlug(string $domain): string
     {
-        return DomainResolver::domainTagSlug($domain);
+        return Domain::make($domain)->tag();
     }
 
     private function configValue(string $key, mixed $default = null): mixed

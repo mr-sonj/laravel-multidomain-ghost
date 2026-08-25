@@ -6,7 +6,7 @@ namespace MrSonj\MultiDomainGhost\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
-use MrSonj\MultiDomainGhost\Services\DomainResolver;
+use MrSonj\MultiDomainGhost\Support\Domain;
 use MrSonj\MultiDomainGhost\Support\DomainName;
 
 class DomainRemoveCommand extends Command
@@ -19,7 +19,8 @@ class DomainRemoveCommand extends Command
 
     public function handle(Filesystem $files): int
     {
-        $domain = DomainResolver::normalizeDomain((string) $this->argument('domain'));
+        $name = Domain::make((string) $this->argument('domain'));
+        $domain = $name->host();
         if (! DomainName::isRegistrable($domain)) {
             $this->error("Invalid domain name [{$domain}].");
 
@@ -42,7 +43,7 @@ class DomainRemoveCommand extends Command
         config()->set('domain', $domainConfig);
 
         if ($this->option('force')) {
-            $storagePath = base_path('storage/'.DomainResolver::dirKeyFor($domain));
+            $storagePath = base_path('storage/'.$name->key());
             if ($files->isDirectory($storagePath)) {
                 $files->deleteDirectory($storagePath);
                 $this->warn("Deleted {$storagePath}");

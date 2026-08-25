@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace MrSonj\MultiDomainGhost\Console\Commands;
 
 use Illuminate\Console\Command;
-use MrSonj\MultiDomainGhost\Services\DomainResolver;
+use MrSonj\MultiDomainGhost\Support\Domain;
 use MrSonj\MultiDomainGhost\Support\DomainName;
 
 class GhostDomainAddCommand extends Command
@@ -20,15 +20,16 @@ class GhostDomainAddCommand extends Command
 
     public function handle(): int
     {
-        $domain = DomainResolver::normalizeDomain((string) $this->argument('domain'));
+        $name = Domain::make((string) $this->argument('domain'));
+        $domain = $name->host();
         if (! DomainName::isRegistrable($domain)) {
             $this->error("Invalid domain name [{$domain}].");
 
             return self::FAILURE;
         }
 
-        $sanitized = DomainResolver::dirKeyFor($domain);
-        $tagSlug = DomainResolver::domainTagSlug($domain);
+        $sanitized = $name->key();
+        $tagSlug = $name->tag();
 
         $this->info("Registering domain: {$domain} (key: {$sanitized}, tag: #{$tagSlug})");
 
