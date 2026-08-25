@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MrSonj\MultiDomainGhost\Tests\Feature;
 
+use Illuminate\Routing\RouteCollection;
 use Illuminate\Support\Facades\Route;
 use MrSonj\MultiDomainGhost\Contracts\DomainEnricherInterface;
 use MrSonj\MultiDomainGhost\Http\Controllers\GhostController;
@@ -160,5 +161,77 @@ class GhostDomainRoutesTest extends TestCase
         $afterCount = count(Route::getRoutes()->getRoutes());
 
         $this->assertSame($initialCount, $afterCount);
+    }
+
+    public function test_provider_skips_route_registration_when_routes_are_cached(): void
+    {
+        $this->setRegisteredDomains(['cached_example_com' => []]);
+        $this->app->instance('routes.cached', true);
+
+        $this->assertTrue($this->app->routesAreCached());
+
+        $this->app['router']->setRoutes(new RouteCollection);
+
+        (new MultiDomainGhostServiceProvider($this->app))->boot();
+
+        $this->assertFalse(Route::has('cached_example_com_home'));
+        $this->assertFalse(Route::has('multidomain-ghost.webhook'));
+        $this->assertCount(0, Route::getRoutes());
+    }
+
+    public function test_macro_does_not_duplicate_default_routes_when_extending_with_custom_routes(): void
+    {
+        Route::ghostDomain('extend.com');
+        $initialCount = count(Route::getRoutes()->getRoutes());
+
+        Route::ghostDomain('extend.com', function () {
+            Route::name('extend_com_custom')->get('/custom', fn () => 'custom');
+        });
+
+        $afterCount = count(Route::getRoutes()->getRoutes());
+
+        $this->assertSame($initialCount + 1, $afterCount);
+        $this->assertTrue(Route::has('extend_com_custom'));
+        $this->assertTrue(Route::has('extend_com_home'));
+    }
+
+    public function test_custom_routes_can_be_registered_after_auto_register_without_redefining_base_routes(): void
+    {
+        $this->setRegisteredDomains(['example_com' => []]);
+        GhostRouteRegistrar::registerAll();
+
+        $routesBefore = Route::getRoutes()->getRoutes();
+        $this->assertNotEmpty($routesBefore);
+
+        Route::ghostDomain('example.com', function () {
+            Route::name('custom_page')->get('/custom-page', fn () => 'custom');
+        });
+
+        $routesAfter = Route::getRoutes()->getRoutes();
+
+        $this->assertCount(count($routesBefore) + 1, $routesAfter);
+        $this->assertTrue(Route::has('custom_page'));
+    }
+
+    public function test_register_all_registers_domains_again_for_a_replaced_route_collection(): void
+    {
+        $this->setRegisteredDomains(['fresh_example_com' => []]);
+        GhostRouteRegistrar::registerAll();
+
+        $initialDomainRouteCount = count(array_filter(
+            Route::getRoutes()->getRoutes(),
+            static fn ($route): bool => in_array(
+                $route->getDomain(),
+                ['fresh.example.com', 'www.fresh.example.com'],
+                true,
+            ),
+        ));
+
+        $this->app['router']->setRoutes(new RouteCollection);
+        GhostRouteRegistrar::registerAll();
+
+        $this->assertGreaterThan(0, $initialDomainRouteCount);
+        $this->assertCount($initialDomainRouteCount, Route::getRoutes());
+        $this->assertTrue(Route::has('fresh_example_com_home'));
     }
 }

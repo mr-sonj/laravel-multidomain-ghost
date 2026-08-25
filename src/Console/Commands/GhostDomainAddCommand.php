@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use MrSonj\MultiDomainGhost\Support\Domain;
 use MrSonj\MultiDomainGhost\Support\DomainCacheFiles;
 use MrSonj\MultiDomainGhost\Support\DomainName;
+use MrSonj\MultiDomainGhost\Support\DomainRegistry;
 
 class GhostDomainAddCommand extends Command
 {
@@ -145,6 +146,8 @@ PHP;
         if (file_exists(base_path(".env.{$domain}"))) {
             $this->warn("A legacy .env.{$domain} exists; this package did not create or modify it.");
         }
+
+        DomainRegistry::flush();
 
         $this->newLine();
         $this->info("✓ Domain {$domain} registered and scaffolded successfully!");

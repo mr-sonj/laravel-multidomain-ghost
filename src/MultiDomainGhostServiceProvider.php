@@ -115,6 +115,10 @@ class MultiDomainGhostServiceProvider extends ServiceProvider
 
     private function registerDomainRoutes(): void
     {
+        if ($this->app->routesAreCached()) {
+            return;
+        }
+
         if ((bool) config('multidomain-ghost.routes.auto_register', true)) {
             Route::middleware('web')->group(static function (): void {
                 GhostRouteRegistrar::registerAll();
@@ -124,6 +128,10 @@ class MultiDomainGhostServiceProvider extends ServiceProvider
 
     private function registerWebhookRoute(): void
     {
+        if ($this->app->routesAreCached()) {
+            return;
+        }
+
         $webhook = (array) config('multidomain-ghost.routes.webhook', []);
 
         if ($webhook['enabled'] ?? true) {

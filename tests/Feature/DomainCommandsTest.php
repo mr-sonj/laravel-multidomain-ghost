@@ -14,6 +14,8 @@ class DomainCommandsTest extends TestCase
 
     protected function setUp(): void
     {
+        DomainRegistry::flush();
+
         parent::setUp();
 
         $this->originalBasePath = $this->app->basePath();
@@ -45,6 +47,8 @@ class DomainCommandsTest extends TestCase
 
     protected function tearDown(): void
     {
+        DomainRegistry::flush();
+
         $this->app->setBasePath($this->originalBasePath);
         (new Filesystem)->deleteDirectory($this->basePath);
 
@@ -191,6 +195,8 @@ class DomainCommandsTest extends TestCase
      */
     private function writeDomainConfigs(array $domains): void
     {
+        DomainRegistry::flush();
+
         $files = new Filesystem;
 
         foreach ($domains as $key => $overrides) {

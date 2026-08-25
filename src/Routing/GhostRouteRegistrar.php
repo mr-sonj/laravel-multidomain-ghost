@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MrSonj\MultiDomainGhost\Routing;
 
 use Closure;
+use Illuminate\Routing\RouteCollectionInterface;
 use Illuminate\Support\Facades\Route;
 use MrSonj\MultiDomainGhost\Http\Controllers\GhostController;
 use MrSonj\MultiDomainGhost\Http\Middleware\EnsureRegisteredDomain;
@@ -13,6 +14,8 @@ use MrSonj\MultiDomainGhost\Support\DomainRegistry;
 
 class GhostRouteRegistrar
 {
+    private static ?RouteCollectionInterface $routeCollection = null;
+
     /**
      * @var array<string, bool>
      */
@@ -28,7 +31,21 @@ class GhostRouteRegistrar
             return;
         }
 
-        if (isset(self::$registeredDomains[$domain]) && $routes === null) {
+        $routeCollection = Route::getRoutes();
+        if (self::$routeCollection !== $routeCollection) {
+            self::$routeCollection = $routeCollection;
+            self::$registeredDomains = [];
+        }
+
+        $middleware = (array) config('multidomain-ghost.routes.middleware', ['web']);
+
+        if (isset(self::$registeredDomains[$domain])) {
+            if ($routes instanceof Closure) {
+                Route::domain($domain)
+                    ->middleware($middleware)
+                    ->group($routes);
+            }
+
             return;
         }
 
@@ -36,7 +53,6 @@ class GhostRouteRegistrar
 
         $sanitized = DomainName::dirKey($domain);
         $routeNamePrefix = str_replace(['.', '-'], '_', $domain);
-        $middleware = (array) config('multidomain-ghost.routes.middleware', ['web']);
 
         Route::domain($domain)
             ->middleware($middleware)
@@ -96,6 +112,7 @@ class GhostRouteRegistrar
      */
     public static function flush(): void
     {
+        self::$routeCollection = null;
         self::$registeredDomains = [];
     }
 }

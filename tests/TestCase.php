@@ -4,6 +4,7 @@ namespace MrSonj\MultiDomainGhost\Tests;
 
 use Illuminate\Filesystem\Filesystem;
 use MrSonj\MultiDomainGhost\MultiDomainGhostServiceProvider;
+use MrSonj\MultiDomainGhost\Support\DomainRegistry;
 use Orchestra\Testbench\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
@@ -22,6 +23,8 @@ abstract class TestCase extends BaseTestCase
      */
     protected function setRegisteredDomains(array $domains): void
     {
+        DomainRegistry::flush();
+
         $files = new Filesystem;
 
         if ($this->temporaryConfigPath === null) {
@@ -44,6 +47,8 @@ abstract class TestCase extends BaseTestCase
 
     protected function tearDown(): void
     {
+        DomainRegistry::flush();
+
         if ($this->temporaryConfigPath !== null) {
             (new Filesystem)->deleteDirectory($this->temporaryConfigPath);
         }
