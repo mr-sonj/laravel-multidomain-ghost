@@ -19,7 +19,7 @@ class GhostContentService
 
     private GhostClient $ghost;
 
-    private bool $isLocal;
+    private bool $cacheEnabled;
 
     private string $domain;
 
@@ -27,7 +27,7 @@ class GhostContentService
 
     public function __construct(GhostClient $ghost, DomainResolver $domainResolver)
     {
-        $this->isLocal = app()->environment('local');
+        $this->cacheEnabled = GhostCache::enabled();
         $this->domain = $domainResolver->resolve();
         $this->ghost = $ghost;
     }
@@ -37,9 +37,17 @@ class GhostContentService
         return $this->domain;
     }
 
+    public function cacheEnabled(): bool
+    {
+        return $this->cacheEnabled;
+    }
+
+    /**
+     * @deprecated Reads as "caching is off". Use cacheEnabled().
+     */
     public function isLocal(): bool
     {
-        return $this->isLocal;
+        return ! $this->cacheEnabled;
     }
 
     /**
@@ -58,7 +66,7 @@ class GhostContentService
 
     public function dataBlog(int $page = 1, int $limit = 15): ?array
     {
-        if ($this->isLocal) {
+        if (! $this->cacheEnabled) {
             return $this->ghost->list('tag:-hash-page', null, $page, $limit, include: 'tags,authors');
         }
 
@@ -72,7 +80,7 @@ class GhostContentService
         foreach ($this->canonicalUrlVariants($canonicalUrl) as $variant) {
             $content = $this->getPostByCanonicalUrl($variant);
             if ($content !== null) {
-                if (! $this->isLocal && $variant !== $canonicalUrl) {
+                if ($this->cacheEnabled && $variant !== $canonicalUrl) {
                     $this->cache()->put($this->postCacheKey($canonicalUrl), $content, $this->cacheTtl());
                 }
 
@@ -105,7 +113,7 @@ class GhostContentService
 
     private function getPostByCanonicalUrl(string $canonicalUrl): ?array
     {
-        if ($this->isLocal) {
+        if (! $this->cacheEnabled) {
             return $this->ghost->content($canonicalUrl);
         }
 
@@ -149,7 +157,7 @@ class GhostContentService
 
     public function slugs(): array
     {
-        if ($this->isLocal) {
+        if (! $this->cacheEnabled) {
             return $this->ghost->slugs();
         }
 

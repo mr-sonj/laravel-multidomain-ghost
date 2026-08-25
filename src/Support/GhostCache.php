@@ -59,6 +59,24 @@ final class GhostCache
         return filled($configured) ? (string) $configured : self::STORE;
     }
 
+    /**
+     * Whether Ghost responses are cached at all.
+     *
+     * Off in local by default so content edits show up immediately - but a config
+     * value rather than a hard-coded environment check, because without a switch
+     * every cache defect is only reproducible in production.
+     */
+    public static function enabled(): bool
+    {
+        $configured = config('multidomain-ghost.cache.enabled');
+
+        if ($configured === null || $configured === '') {
+            return ! app()->environment('local');
+        }
+
+        return filter_var($configured, FILTER_VALIDATE_BOOL);
+    }
+
     public static function ttl(): int
     {
         return (int) config(

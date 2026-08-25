@@ -19,6 +19,9 @@ return [
         // is deliberately shared across domains: that is what lets a webhook
         // arriving on one domain invalidate any other domain.
         'store' => env('GHOST_CACHE_STORE'),
+        // Leave unset to keep caching off in local and on everywhere else. Set
+        // GHOST_CACHE_ENABLED=true to reproduce a cache bug without deploying.
+        'enabled' => env('GHOST_CACHE_ENABLED'),
         'prefix' => env('GHOST_CACHE_PREFIX', 'multidomain_ghost'),
         'ttl' => (int) env('GHOST_CACHE_TTL', 60 * 60 * 24 * 30),
         // Remembering "not found" keeps unknown URLs from reaching Ghost on every hit.
