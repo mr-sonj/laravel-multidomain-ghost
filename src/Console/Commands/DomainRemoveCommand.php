@@ -15,7 +15,7 @@ class DomainRemoveCommand extends Command
         {domain : Raw domain name, e.g. example.com}
         {--force : Also delete the domain storage directory}';
 
-    protected $description = 'Unregister a domain without deleting its config override';
+    protected $description = 'Remove a domain by deleting its config override';
 
     public function handle(Filesystem $files): int
     {
@@ -27,20 +27,15 @@ class DomainRemoveCommand extends Command
             return self::FAILURE;
         }
 
-        $configFile = config_path('domain.php');
-        $domainConfig = is_file($configFile) ? require $configFile : [];
+        $configFile = config_path("domains/{$name->key()}.php");
 
-        if (! is_array($domainConfig)) {
-            $this->error('config/domain.php must return an array.');
+        if (! $files->exists($configFile)) {
+            $this->error("Domain [{$domain}] is not registered (config/domains/{$name->key()}.php not found).");
 
             return self::FAILURE;
         }
 
-        unset($domainConfig['domains'][$domain]);
-
-        $phpContent = "<?php\n\nreturn ".var_export($domainConfig, true).";\n";
-        $files->put($configFile, $phpContent);
-        config()->set('domain', $domainConfig);
+        $files->delete($configFile);
 
         if ($this->option('force')) {
             $storagePath = base_path('storage/'.$name->key());
@@ -50,7 +45,7 @@ class DomainRemoveCommand extends Command
             }
         }
 
-        $this->info("Domain {$domain} unregistered. Its config/domains override was preserved.");
+        $this->info("Domain {$domain} removed.");
 
         return self::SUCCESS;
     }

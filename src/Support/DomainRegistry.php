@@ -7,10 +7,9 @@ namespace MrSonj\MultiDomainGhost\Support;
 /**
  * The one answer to "which domains does this application serve".
  *
- * Two registries exist in the wild: the env-driven package allowlist, and the
- * config/domain.php file `domain:add` maintains. Reading them in three separate
- * places is how `domain:list` came to disagree with `domain:optimize` and the
- * webhook about a domain registered through the environment.
+ * Registered domains are discovered directly from the existence of their
+ * configuration override files (e.g. config/domains/example_com.php), which
+ * Laravel automatically loads into the `domains` config repository.
  */
 final class DomainRegistry
 {
@@ -21,15 +20,16 @@ final class DomainRegistry
      */
     public static function all(): array
     {
-        $allowlist = array_values(array_filter((array) config('multidomain-ghost.domains', [])));
+        $keys = array_keys((array) config('domains', []));
 
-        $source = $allowlist !== []
-            ? $allowlist
-            : array_keys((array) config('domain.domains', []));
+        $domains = array_map(
+            static fn (string|int $key): string => str_replace('_', '.', (string) $key),
+            $keys,
+        );
 
-        return array_values(array_unique(array_filter(array_map(
-            static fn ($domain): string => DomainName::normalize((string) $domain),
-            $source,
-        ))));
+        return array_values(array_filter(array_unique(array_map(
+            static fn (string $domain): string => DomainName::normalize($domain),
+            $domains,
+        )), static fn (string $domain): bool => $domain !== '' && DomainName::isRegistrable($domain)));
     }
 }

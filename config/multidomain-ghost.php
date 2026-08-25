@@ -40,10 +40,6 @@ return [
         FILTER_VALIDATE_BOOL,
     ),
     'webhook_tolerance' => (int) env('GHOST_WEBHOOK_TOLERANCE', 300),
-    'domains' => array_values(array_filter(array_map(
-        static fn (string $domain): string => strtolower(trim($domain)),
-        explode(',', (string) env('GHOST_REGISTERED_DOMAINS', '')),
-    ))),
     'routes' => [
         'webhook' => [
             'enabled' => filter_var(env('GHOST_WEBHOOK_ROUTE_ENABLED', true), FILTER_VALIDATE_BOOL),

@@ -22,7 +22,7 @@ class GhostControllerTest extends TestCase
     protected function getEnvironmentSetUp($app): void
     {
         $app->bind(DomainEnricherInterface::class, NullEnricher::class);
-        $app['config']->set('multidomain-ghost.domains', ['example.com']);
+        $app['config']->set('domains.example_com', []);
         $app['config']->set('multidomain-ghost.webhook_secret', 'secret123');
     }
 
@@ -131,8 +131,7 @@ class GhostControllerTest extends TestCase
     public function test_page_webhook_works_without_a_domain_allowlist(): void
     {
         Event::fake();
-        $this->app['config']->set('multidomain-ghost.domains', []);
-        $this->app['config']->set('domain.domains', []);
+        $this->app['config']->set('domains', []);
 
         $response = $this->signedWebhook([
             'name' => 'page.published',
