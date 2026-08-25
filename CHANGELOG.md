@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+### Fixed
+
+- `domain:list` read only `config/domain.php` and therefore never showed a domain
+  registered through `GHOST_REGISTERED_DOMAINS`, while `domain:optimize` and the
+  webhook honoured both. All three now read one `DomainRegistry`.
+- `seoData()` read `$content['domain']` without a guard, so building the array by
+  hand produced a warning and an `is_part_of` of `https:///#website`.
+
+### Changed
+
+- Ghost caching is now `multidomain-ghost.cache.enabled` (`GHOST_CACHE_ENABLED`)
+  instead of a hard-coded `local` environment check. The default is unchanged:
+  off in local, on everywhere else.
+- Webhooks are handled by `GhostWebhookController`, which does not construct the
+  domain enricher. `GhostController::postWebhook()` still delegates to it.
+- The shipped config no longer declares the duplicated top-level `cache_ttl`.
+  Published config files that still carry it keep working.
+
+### Deprecated
+
+- `GhostController::postWebhook()` is deprecated. Route webhooks at
+  `GhostWebhookController` instead.
+- `DomainResolver::domainTagSlug()`, `::normalizeDomain()`, `::dirKeyFor()` and
+  `GhostClient::domainTagSlug()`. Each is now a one-line delegate to the new
+  `Domain` value object — `Domain::make($host)->tag()`, `->host()`, `->key()`.
+  They keep working and will be removed in the next major.
+
+## 1.1.0 - 2026-08-25
+
 Ghost content caching moved to a dedicated store, and upstream failures no longer
 reach the browser. No public API was removed; existing applications keep working
 without changes.

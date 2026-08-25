@@ -386,3 +386,21 @@ These methods return normalized arrays without imposing a view or serialization 
 ## License
 
 MIT
+
+## Scope Intentionally Left Out of Package
+
+The following responsibilities belong to the consumer application or deployment environment:
+
+- Creating or selecting `.env.{domain}` files.
+- Storing application secrets.
+- Registering public page routes for individual domains.
+- Automatically registering robots/sitemap/feed routes.
+- Imposing XML Sitemap, RSS, or Atom Blade structures.
+- Dependency on `artesaos/seotools` or specific SEO renderers.
+- Domain-specific business logic.
+- Brand-specific HTML or title transformations.
+- Updating `vite.config.js`.
+- Configuring Nginx, DNS, TLS, Laravel Herd, or Forge.
+- Generating production queue workers or scheduler services.
+- Running database migrations.
+- Replacing Ghost Admin or Ghost authoring workflows.
