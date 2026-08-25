@@ -47,8 +47,9 @@ php artisan domain:add example.com
 
 Creates `storage/example_com/`, `config/domains/example_com.php` (which registers the domain),
 `resources/views/example_com/` (`main`, `home`, `page`, `blog`, `post`, `contact`),
-`resources/css/example_com.css`, a Vite input entry, and a `Route::domain()` group in `routes/web.php`.
-Unsupported Vite or route structures produce a warning with manual instructions, and
+`resources/css/example_com.css`, and a Vite input entry. Routes are automatically registered
+from the domain registry without polluting `routes/web.php`.
+Unsupported Vite structures produce a warning with manual instructions, and
 `_setup/multi_domain_local_herd.conf` is updated when that optional file exists. Pass `--force` only
 to overwrite generated views and CSS.
 
@@ -96,7 +97,28 @@ a file no domain request ever reads. See [Deployment](#deployment) for the rest.
 
 Everything below is optional.
 
-## Your own page routes
+## Explicit route declaration & customization
+
+By default, registered domains automatically have their Ghost routes loaded
+(`multidomain-ghost.routes.auto_register`). To declare them explicitly, first set
+`GHOST_ROUTES_AUTO_REGISTER=false` so the standard routes are not registered twice, then use the
+`Route::ghostDomain()` macro:
+
+```php
+use Illuminate\Support\Facades\Route;
+
+// Register all standard Ghost routes for a domain in 1 line:
+Route::ghostDomain('example.com');
+
+// Or attach domain-specific custom routes inside the group:
+Route::ghostDomain('example.com', function () {
+    Route::get('/pricing', [PricingController::class, 'index']);
+});
+```
+
+The `www` redirect is enabled by default. Set `GHOST_ROUTES_REDIRECT_WWW=false` to opt out.
+
+To define custom page routes manually:
 
 ```php
 use Illuminate\Support\Facades\Route;
@@ -140,8 +162,8 @@ php artisan domain:remove example.com          # unregister, clear its caches an
 php artisan domain:remove example.com --force  # also delete the storage directory
 ```
 
-Generated Ghost routes check this file-backed registry at request time. Removing a domain therefore
-returns 404 even if its generated route block is still present in `routes/web.php`.
+Ghost routes check this file-backed registry at request time. Removing a domain therefore makes any
+route still held by a long-running process return 404.
 
 ## Ghost API options
 

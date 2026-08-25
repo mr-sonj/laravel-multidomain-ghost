@@ -41,6 +41,9 @@ return [
     ),
     'webhook_tolerance' => (int) env('GHOST_WEBHOOK_TOLERANCE', 300),
     'routes' => [
+        'auto_register' => filter_var(env('GHOST_ROUTES_AUTO_REGISTER', true), FILTER_VALIDATE_BOOL),
+        'middleware' => ['web'],
+        'redirect_www' => filter_var(env('GHOST_ROUTES_REDIRECT_WWW', true), FILTER_VALIDATE_BOOL),
         'webhook' => [
             'enabled' => filter_var(env('GHOST_WEBHOOK_ROUTE_ENABLED', true), FILTER_VALIDATE_BOOL),
             'uri' => env('GHOST_WEBHOOK_ROUTE', 'webhook/ghost/post'),
