@@ -11,6 +11,8 @@ abstract class TestCase extends BaseTestCase
 {
     private ?string $temporaryConfigPath = null;
 
+    private array $temporaryRouteFiles = [];
+
     protected function getPackageProviders($app): array
     {
         return [
@@ -45,12 +47,37 @@ abstract class TestCase extends BaseTestCase
         $this->app['config']->set('domains', $domains);
     }
 
+    protected function setDomainRouteFiles(array $files): void
+    {
+        $fs = new Filesystem;
+        $dir = base_path('routes/domains');
+        if (! is_dir($dir)) {
+            $fs->makeDirectory($dir, 0755, true);
+        }
+
+        foreach ($files as $name => $content) {
+            $path = "{$dir}/{$name}";
+            $fs->put($path, $content);
+            $this->temporaryRouteFiles[] = $path;
+        }
+    }
+
     protected function tearDown(): void
     {
         DomainRegistry::flush();
 
         if ($this->temporaryConfigPath !== null) {
             (new Filesystem)->deleteDirectory($this->temporaryConfigPath);
+        }
+
+        if ($this->temporaryRouteFiles !== []) {
+            $fs = new Filesystem;
+            foreach ($this->temporaryRouteFiles as $file) {
+                if (is_file($file)) {
+                    $fs->delete($file);
+                }
+            }
+            $this->temporaryRouteFiles = [];
         }
 
         parent::tearDown();

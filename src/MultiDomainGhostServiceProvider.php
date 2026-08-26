@@ -22,6 +22,8 @@ use MrSonj\MultiDomainGhost\Services\DomainResolver;
 use MrSonj\MultiDomainGhost\Services\GhostCacheManager;
 use MrSonj\MultiDomainGhost\Services\GhostContentService;
 use MrSonj\MultiDomainGhost\Support\DomainEnricherLocator;
+use MrSonj\MultiDomainGhost\Support\DomainName;
+use MrSonj\MultiDomainGhost\Support\DomainRegistry;
 use MrSonj\MultiDomainGhost\Support\GhostCache;
 use MrSonj\MultiDomainGhost\Support\NullContentTransformer;
 use MrSonj\MultiDomainGhost\Support\NullEnricher;
@@ -121,9 +123,34 @@ class MultiDomainGhostServiceProvider extends ServiceProvider
 
         if ((bool) config('multidomain-ghost.routes.auto_register', true)) {
             Route::middleware('web')->group(static function (): void {
-                GhostRouteRegistrar::registerAll();
+                foreach (DomainRegistry::all() as $domain) {
+                    $file = base_path('routes/domains/'.DomainName::dirKey($domain).'.php');
+
+                    GhostRouteRegistrar::registerDomain(
+                        $domain,
+                        is_file($file)
+                            ? static function () use ($file): void {
+                                require $file;
+                            }
+                        : null,
+                    );
+                }
             });
         }
+
+        // Deferred rather than registered alongside the routes above, and this is load
+        // bearing: withRouting() registers the application's own route provider from a
+        // booting callback, which appends it to the end of the provider list, so
+        // routes/web.php loads after this provider has booted. A catch-all registered
+        // above would therefore sit in front of every route declared there and swallow
+        // all of them. Booted callbacks run once every provider has booted, which is
+        // what puts the catch-all genuinely last.
+        //
+        // Registered even when auto_register is off, because routes/web.php can still
+        // declare domains through the Route::ghostDomain() macro.
+        $this->app->booted(static function (): void {
+            GhostRouteRegistrar::registerCatchAlls();
+        });
     }
 
     private function registerWebhookRoute(): void

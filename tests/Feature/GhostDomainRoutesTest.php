@@ -39,27 +39,13 @@ class GhostDomainRoutesTest extends TestCase
 
         $this->assertTrue(Route::has('example_com_robots'));
         $this->assertTrue(Route::has('example_com_sitemap'));
-        $this->assertTrue(Route::has('example_com_feed'));
         $this->assertTrue(Route::has('example_com_ads'));
-        $this->assertTrue(Route::has('example_com_home'));
-        $this->assertTrue(Route::has('example_com_blog'));
-        $this->assertTrue(Route::has('example_com_post'));
         $this->assertTrue(Route::has('example_com_www_redirect'));
 
-        $homeRoute = Route::getRoutes()->getByName('example_com_home');
-        $this->assertNotNull($homeRoute);
-        $this->assertSame('example.com', $homeRoute->getDomain());
-        $this->assertSame(GhostController::class.'@page', ltrim($homeRoute->getActionName(), '\\'));
-
-        $blogRoute = Route::getRoutes()->getByName('example_com_blog');
-        $this->assertNotNull($blogRoute);
-        $this->assertSame('example_com/blog', $blogRoute->defaults['viewPath']);
-        $this->assertSame(GhostController::class.'@blog', ltrim($blogRoute->getActionName(), '\\'));
-
-        $postRoute = Route::getRoutes()->getByName('example_com_post');
-        $this->assertNotNull($postRoute);
-        $this->assertSame('example_com/post', $postRoute->defaults['viewPath']);
-        $this->assertSame(GhostController::class.'@page', ltrim($postRoute->getActionName(), '\\'));
+        $this->assertFalse(Route::has('example_com_home'));
+        $this->assertFalse(Route::has('example_com_blog'));
+        $this->assertFalse(Route::has('example_com_post'));
+        $this->assertFalse(Route::has('example_com_feed'));
     }
 
     public function test_macro_handles_domains_with_hyphens(): void
@@ -68,16 +54,8 @@ class GhostDomainRoutesTest extends TestCase
         Route::ghostDomain('my-sample-blog.co.uk');
 
         $this->assertTrue(Route::has('my_sample_blog_co_uk_robots'));
-        $this->assertTrue(Route::has('my_sample_blog_co_uk_home'));
-        $this->assertTrue(Route::has('my_sample_blog_co_uk_blog'));
-        $this->assertTrue(Route::has('my_sample_blog_co_uk_post'));
         $this->assertTrue(Route::has('my_sample_blog_co_uk_ads'));
         $this->assertTrue(Route::has('my_sample_blog_co_uk_www_redirect'));
-
-        $homeRoute = Route::getRoutes()->getByName('my_sample_blog_co_uk_home');
-        $this->assertNotNull($homeRoute);
-        $this->assertSame('my-sample-blog.co.uk', $homeRoute->getDomain());
-        $this->assertSame('my-sample-blog_co_uk/home', $homeRoute->defaults['viewPath']);
     }
 
     public function test_macro_accepts_custom_routes_closure(): void
@@ -86,7 +64,6 @@ class GhostDomainRoutesTest extends TestCase
             Route::name('custom_deal')->get('/special-deal', fn () => 'deal');
         });
 
-        $this->assertTrue(Route::has('custom_com_home'));
         $this->assertTrue(Route::has('custom_deal'));
 
         $customRoute = Route::getRoutes()->getByName('custom_deal');
@@ -100,7 +77,6 @@ class GhostDomainRoutesTest extends TestCase
 
         Route::ghostDomain('no-www.com');
 
-        $this->assertTrue(Route::has('no_www_com_home'));
         $this->assertFalse(Route::has('no_www_com_www_redirect'));
     }
 
@@ -126,17 +102,6 @@ class GhostDomainRoutesTest extends TestCase
         $this->get('https://www.removed.example.com/some/path')->assertNotFound();
     }
 
-    public function test_provider_auto_registers_domain_routes_with_web_middleware(): void
-    {
-        $this->setRegisteredDomains(['auto_example_com' => []]);
-
-        (new MultiDomainGhostServiceProvider($this->app))->boot();
-
-        $route = Route::getRoutes()->getByName('auto_example_com_home');
-        $this->assertNotNull($route);
-        $this->assertContains('web', $route->middleware());
-    }
-
     public function test_register_all_registers_routes_for_all_discovered_domains(): void
     {
         $this->setRegisteredDomains([
@@ -146,15 +111,15 @@ class GhostDomainRoutesTest extends TestCase
 
         GhostRouteRegistrar::registerAll();
 
-        $this->assertTrue(Route::has('site_one_com_home'));
-        $this->assertTrue(Route::has('site_two_com_home'));
+        $this->assertTrue(Route::has('site_one_com_robots'));
+        $this->assertTrue(Route::has('site_two_com_robots'));
     }
 
     public function test_macro_ignores_empty_or_invalid_domain(): void
     {
         Route::ghostDomain('');
 
-        $this->assertFalse(Route::has('_home'));
+        $this->assertFalse(Route::has('_robots'));
     }
 
     public function test_macro_is_idempotent_for_the_same_domain(): void
@@ -183,7 +148,7 @@ class GhostDomainRoutesTest extends TestCase
 
         (new MultiDomainGhostServiceProvider($this->app))->boot();
 
-        $this->assertFalse(Route::has('cached_example_com_home'));
+        $this->assertFalse(Route::has('cached_example_com_robots'));
         $this->assertFalse(Route::has('multidomain-ghost.webhook'));
         $this->assertCount(0, Route::getRoutes());
 
@@ -205,7 +170,7 @@ class GhostDomainRoutesTest extends TestCase
 
         $this->assertSame($initialCount + 1, $afterCount);
         $this->assertTrue(Route::has('extend_com_custom'));
-        $this->assertTrue(Route::has('extend_com_home'));
+        $this->assertTrue(Route::has('extend_com_robots'));
     }
 
     public function test_custom_routes_can_be_registered_after_auto_register_without_redefining_base_routes(): void
@@ -245,7 +210,7 @@ class GhostDomainRoutesTest extends TestCase
 
         $this->assertGreaterThan(0, $initialDomainRouteCount);
         $this->assertCount($initialDomainRouteCount, Route::getRoutes());
-        $this->assertTrue(Route::has('fresh_example_com_home'));
+        $this->assertTrue(Route::has('fresh_example_com_robots'));
     }
 
     public function test_ads_txt_route_is_not_registered_when_config_is_empty(): void
@@ -299,6 +264,8 @@ class GhostDomainRoutesTest extends TestCase
             Route::name('catch_all_com_custom')->get('/custom', fn () => 'custom');
         });
 
+        GhostRouteRegistrar::registerCatchAlls();
+
         $this->assertTrue(Route::has('catch_all_com_catch_all'));
 
         $catchAllRoute = Route::getRoutes()->getByName('catch_all_com_catch_all');
@@ -343,81 +310,145 @@ class GhostDomainRoutesTest extends TestCase
         $this->get('https://example.com/app-ads.txt')->assertOk()->assertSee('pub-789', false);
     }
 
-    public function test_post_route_rejects_paths_that_are_not_slugs(): void
-    {
-        $this->setRegisteredDomains(['example_com' => []]);
-        GhostRouteRegistrar::registerAll();
-
-        $this->get('https://example.com/blog/foo.txt')->assertNotFound();
-        $this->get('https://example.com/blog/.env')->assertNotFound();
-
-        $this->assertSame(
-            'example_com_post',
-            $this->matchedRouteName('https://example.com/blog/a-real-slug_123'),
-        );
-    }
-
     public function test_a_path_set_to_null_disables_only_that_route(): void
     {
-        config()->set('multidomain-ghost.routes.paths.blog', null);
+        config()->set('multidomain-ghost.routes.paths.sitemap', null);
+        // ads.txt is registered only when it has a body, so give it one: without this
+        // the loop below would pass for the wrong reason.
+        config()->set('multidomain-ghost.ads.txt', 'google.com, pub-123, DIRECT');
 
         Route::ghostDomain('example.com');
 
-        $this->assertFalse(Route::has('example_com_blog'));
+        $this->assertFalse(Route::has('example_com_sitemap'));
 
-        foreach (['home', 'post', 'robots', 'sitemap', 'feed'] as $name) {
+        foreach (['robots', 'ads'] as $name) {
             $this->assertTrue(Route::has("example_com_{$name}"));
         }
     }
 
     public function test_a_relocated_path_keeps_its_route_name_and_view_path(): void
     {
-        config()->set('multidomain-ghost.routes.paths.blog', '/news');
-        config()->set('multidomain-ghost.routes.paths.post', '/news/{slug}');
+        config()->set('multidomain-ghost.routes.paths.sitemap', '/sitemap-index.xml');
 
         Route::ghostDomain('example.com');
 
-        $blog = Route::getRoutes()->getByName('example_com_blog');
-        $this->assertSame('news', $blog->uri());
-        $this->assertSame('example_com/blog', $blog->defaults['viewPath']);
-
-        $post = Route::getRoutes()->getByName('example_com_post');
-        $this->assertSame('news/{slug}', $post->uri());
-        $this->assertSame('example_com/post', $post->defaults['viewPath']);
+        $sitemap = Route::getRoutes()->getByName('example_com_sitemap');
+        $this->assertSame('sitemap-index.xml', $sitemap->uri());
     }
 
     public function test_catch_all_does_not_swallow_routes_added_by_a_later_ghost_domain_call(): void
     {
         config()->set('multidomain-ghost.routes.catch_all', true);
 
-        // Mirrors auto_register during boot, then routes/web.php extending the domain.
         GhostRouteRegistrar::registerDomain('example.com');
 
         Route::ghostDomain('example.com', function () {
             Route::name('example_com_pricing')->get('/pricing', fn () => 'pricing');
         });
+
+        GhostRouteRegistrar::registerCatchAlls();
 
         $this->assertSame('example_com_pricing', $this->matchedRouteName('https://example.com/pricing'));
         $this->assertSame('example_com_catch_all', $this->matchedRouteName('https://example.com/anything-else'));
     }
 
-    public function test_reordering_the_catch_all_does_not_duplicate_existing_routes(): void
+    public function test_domain_route_file_is_loaded_inside_the_domain_group(): void
+    {
+        $this->setRegisteredDomains(['example_com' => []]);
+        $this->setDomainRouteFiles([
+            'example_com.php' => <<<'PHP'
+<?php
+use Illuminate\Support\Facades\Route;
+Route::get('/pricing', fn () => 'pricing')->name('example_com_pricing');
+PHP
+        ]);
+
+        (new MultiDomainGhostServiceProvider($this->app))->boot();
+
+        Route::getRoutes()->refreshNameLookups();
+
+        $pricingRoute = Route::getRoutes()->getByName('example_com_pricing');
+        $this->assertNotNull($pricingRoute);
+        $this->assertSame('example.com', $pricingRoute->getDomain());
+        $this->assertContains('web', $pricingRoute->middleware());
+    }
+
+    public function test_a_missing_domain_route_file_is_ignored(): void
+    {
+        $this->setRegisteredDomains(['example_com' => []]);
+
+        // Boot shouldn't throw an error when missing example_com.php
+        (new MultiDomainGhostServiceProvider($this->app))->boot();
+
+        $this->assertTrue(Route::has('example_com_robots'));
+    }
+
+    public function test_catch_all_is_registered_after_routes_declared_post_boot(): void
+    {
+        $this->setRegisteredDomains(['example_com' => []]);
+        config()->set('multidomain-ghost.routes.catch_all', true);
+
+        GhostRouteRegistrar::registerAll();
+
+        // Add a route loose
+        Route::domain('example.com')->get('/about', fn () => 'about')->name('example_com_about');
+
+        GhostRouteRegistrar::registerCatchAlls();
+
+        $this->assertSame('example_com_about', $this->matchedRouteName('https://example.com/about'));
+        $this->assertSame('example_com_catch_all', $this->matchedRouteName('https://example.com/anything-else'));
+    }
+
+    public function test_register_all_leaves_the_catch_all_to_the_booted_phase(): void
+    {
+        $this->setRegisteredDomains(['example_com' => []]);
+        config()->set('multidomain-ghost.routes.catch_all', true);
+
+        GhostRouteRegistrar::registerAll();
+
+        // routes/web.php has not been loaded at this point - the application's route
+        // provider is registered from a booting callback, so it boots after this
+        // package does. A catch-all registered here would shadow every route in it.
+        $this->assertFalse(Route::has('example_com_catch_all'));
+
+        GhostRouteRegistrar::registerCatchAlls();
+
+        $this->assertTrue(Route::has('example_com_catch_all'));
+    }
+
+    public function test_catch_all_is_not_duplicated_when_registered_twice(): void
+    {
+        $this->setRegisteredDomains(['example_com' => []]);
+        config()->set('multidomain-ghost.routes.catch_all', true);
+
+        GhostRouteRegistrar::registerAll();
+        GhostRouteRegistrar::registerCatchAlls();
+
+        $before = count(Route::getRoutes()->getRoutes());
+        GhostRouteRegistrar::registerCatchAlls();
+        $after = count(Route::getRoutes()->getRoutes());
+
+        $this->assertSame($before, $after);
+    }
+
+    public function test_catch_all_covers_domains_registered_only_through_the_macro(): void
     {
         config()->set('multidomain-ghost.routes.catch_all', true);
 
-        GhostRouteRegistrar::registerDomain('example.com');
-        $before = count(Route::getRoutes()->getRoutes());
+        Route::ghostDomain('macro.com');
+        GhostRouteRegistrar::registerCatchAlls();
 
-        Route::ghostDomain('example.com', function () {
-            Route::name('example_com_pricing')->get('/pricing', fn () => 'pricing');
-        });
+        $this->assertTrue(Route::has('macro_com_catch_all'));
+    }
 
-        $this->assertCount($before + 1, Route::getRoutes()->getRoutes());
-        $this->assertTrue(Route::has('example_com_home'));
+    public function test_ads_path_set_to_null_disables_the_route(): void
+    {
+        config()->set('multidomain-ghost.routes.paths.ads', null);
+        config()->set('multidomain-ghost.ads.txt', 'google.com, pub-123, DIRECT');
 
-        // The registrar must still recognise the rebuilt collection as the same one.
-        GhostRouteRegistrar::registerDomain('example.com');
-        $this->assertCount($before + 1, Route::getRoutes()->getRoutes());
+        Route::ghostDomain('example.com');
+
+        $this->assertFalse(Route::has('example_com_ads'));
     }
 
     private function matchedRouteName(string $url): ?string

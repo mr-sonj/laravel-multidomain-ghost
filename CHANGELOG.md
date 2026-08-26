@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file and published au
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.0.0 - 2026-08-26
+
+### Breaking
+
+- Content routes (`/`, `/blog`, `/blog/{slug}`, `/feed`) are no longer auto-registered for every domain. They must now be declared in `routes/domains/{domain_key}.php`. Run `php artisan domain:add {domain}` to generate the missing file for each domain.
+- `routes.paths.ads = null` in configuration now completely disables the `ads.txt` route instead of falling back to `/ads.txt`. If you had it set to `null` to keep the route, change it to `'/ads.txt'`.
+- `GhostRouteRegistrar::registerAll()` no longer registers the catch-all route. If calling manually, you must also call `GhostRouteRegistrar::registerCatchAlls()` during the `booted` phase.
+
+### Removed
+
+- Removed `home`, `blog`, `post`, and `feed` keys from `multidomain-ghost.routes.paths` global config map.
+- Removed private method `GhostRouteRegistrar::moveCatchAllLast()`.
+
 ## 1.2.0 - 2026-08-26
 
 ### Fixed

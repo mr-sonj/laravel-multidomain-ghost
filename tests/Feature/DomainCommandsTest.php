@@ -87,6 +87,45 @@ class DomainCommandsTest extends TestCase
         $this->assertSame(['example.com'], DomainRegistry::all());
     }
 
+    public function test_domain_add_scaffolds_a_runnable_domain_route_file(): void
+    {
+        $this->artisan('domain:add', ['domain' => 'example.com'])
+            ->assertExitCode(0);
+
+        $routeFile = $this->basePath.'/routes/domains/example_com.php';
+        $this->assertFileExists($routeFile);
+
+        $stub = (new Filesystem)->get($routeFile);
+
+        // The stub is built from an interpolating heredoc, so a stray dollar sign
+        // would silently eat the slug placeholder and leave a route on /blog/.
+        $this->assertStringContainsString("Route::get('/blog/{slug}'", $stub);
+        $this->assertStringContainsString("->where('slug', '[A-Za-z0-9\\-_]+')", $stub);
+
+        // Route names keep the registrar's old convention so route('example_com_home')
+        // in an upgraded application's views carries on resolving.
+        foreach (['home', 'blog', 'post', 'feed'] as $name) {
+            $this->assertStringContainsString("->name('example_com_{$name}')", $stub);
+        }
+
+        $this->assertStringContainsString("->defaults('viewPath', 'example_com/post')", $stub);
+    }
+
+    public function test_domain_add_leaves_an_existing_route_file_alone(): void
+    {
+        $files = new Filesystem;
+        $files->makeDirectory($this->basePath.'/routes/domains', 0755, true);
+        $files->put($this->basePath.'/routes/domains/example_com.php', "<?php\n// mine\n");
+
+        $this->artisan('domain:add', ['domain' => 'example.com'])
+            ->assertExitCode(0);
+
+        $this->assertSame(
+            "<?php\n// mine\n",
+            $files->get($this->basePath.'/routes/domains/example_com.php'),
+        );
+    }
+
     public function test_domain_remove_deletes_config_override(): void
     {
         $files = new Filesystem;

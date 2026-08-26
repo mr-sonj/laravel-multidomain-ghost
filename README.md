@@ -46,12 +46,19 @@ php artisan domain:add example.com
 ```
 
 Creates `storage/example_com/`, `config/domains/example_com.php` (which registers the domain),
-`resources/views/example_com/` (`main`, `home`, `page`, `blog`, `post`, `contact`),
-`resources/css/example_com.css`, and a Vite input entry. Routes are automatically registered
-from the domain registry without polluting `routes/web.php`.
+`routes/domains/example_com.php` (this domain's content routes), `resources/views/example_com/`
+(`main`, `home`, `page`, `blog`, `post`, `contact`), `resources/css/example_com.css`, and a Vite
+input entry.
+
+`routes/domains/example_com.php` is where `/`, `/blog`, `/blog/{slug}` and `/feed` live, and each
+domain shapes them however it likes — that file is loaded automatically from the domain registry,
+already inside the domain's route group, so `routes/web.php` is never touched. The standard files
+(`/robots.txt`, `/sitemap.xml`, `/ads.txt`) are registered for every domain without you declaring
+them. See [Route customization](#route-customization--explicit-declaration).
+
 Unsupported Vite structures produce a warning with manual instructions, and
 `_setup/multi_domain_local_herd.conf` is updated when that optional file exists. Pass `--force` only
-to overwrite generated views and CSS.
+to overwrite generated route files, views and CSS.
 
 ### 4. Publish content in Ghost
 
@@ -99,65 +106,58 @@ Everything below is optional.
 
 ## Route customization & explicit declaration
 
-By default, registered domains automatically have their Ghost routes loaded
-(`multidomain-ghost.routes.auto_register`). The `routes.paths` map in
-`config/multidomain-ghost.php` decides where each route lives, and `null` leaves it
-unregistered:
+By default, registered domains automatically load the content routes declared in their respective `routes/domains/{domain_key}.php` files, as well as the standard Ghost routes (`sitemap.xml`, `robots.txt`, `ads.txt`).
+
+The `routes.paths` map in `config/multidomain-ghost.php` decides where the three standard web files live. Setting any of them to `null` leaves the route unregistered:
 
 ```php
 'routes' => [
     'paths' => [
-        'home'    => '/',
         'sitemap' => '/sitemap.xml',
-        'feed'    => '/feed',
         'robots'  => '/robots.txt',
-        'blog'    => '/news',          // moved; the route is still named {domain}_blog
-        'post'    => '/news/{slug}',   // set either to null to drop the route entirely
-        'ads'     => null,                // null means /ads.txt, registered only when it has content
+        'ads'     => '/ads.txt',
     ],
 ],
 ```
 
-Renaming a path keeps the route name and the `viewPath` default, so `route('example_com_blog')`
-and `resources/views/example_com/blog.blade.php` carry on working unchanged.
-
-> [!IMPORTANT]
-> `routes.paths` is global. Routes are registered once for every domain, so this map cannot be
-> varied per domain from `config/domains/*.php` — an override there applies to every domain in
-> the request. To give one domain its own paths, set `GHOST_ROUTES_AUTO_REGISTER=false` and
-> declare each domain with the `Route::ghostDomain()` macro instead.
-
-To attach domain-specific custom routes, or declare standard routes manually at a specific point (after setting `GHOST_ROUTES_AUTO_REGISTER=false`), you can use the `Route::ghostDomain()` macro:
-
-```php
-use Illuminate\Support\Facades\Route;
-
-// Register all standard Ghost routes for a domain in 1 line:
-Route::ghostDomain('example.com');
-
-// Or attach domain-specific custom routes inside the group:
-Route::ghostDomain('example.com', function () {
-    Route::get('/pricing', [PricingController::class, 'index']);
-});
-```
-
-The `www` redirect is enabled by default. Set `GHOST_ROUTES_REDIRECT_WWW=false` to opt out.
-
-To define custom page routes manually:
+The content routes (`/`, `/blog`, `/blog/{slug}`, `/feed`) are no longer part of this map. They are scaffolded into `routes/domains/{domain_key}.php` when you run `php artisan domain:add`, where you can customize them exactly as you would any other Laravel route:
 
 ```php
 use Illuminate\Support\Facades\Route;
 use MrSonj\MultiDomainGhost\Http\Controllers\GhostController;
+use App\Http\Controllers\PricingController;
 
-Route::domain('example.com')->group(function () {
-    Route::get('/about', [GhostController::class, 'page'])
-        ->defaults('viewPath', 'example_com/page')
-        ->name('example_about');
+Route::get('/', [GhostController::class, 'page'])
+    ->name('example_com_home')
+    ->defaults('viewPath', 'example_com/home');
+
+Route::get('/news', [GhostController::class, 'blog'])
+    ->name('example_com_blog')
+    ->defaults('viewPath', 'example_com/blog');
+
+Route::get('/news/{slug}', [GhostController::class, 'page'])
+    ->name('example_com_post')
+    ->defaults('viewPath', 'example_com/post')
+    ->where('slug', '[A-Za-z0-9\-_]+');
+
+// Domain-specific custom route:
+Route::get('/pricing', [PricingController::class, 'index']);
+```
+
+`page()` passes `$content` and `$seo` to the view; `blog()` adds `$dataBlog` and `$page`. Without `viewPath`, the package falls back to `multidomain-ghost::page` / `multidomain-ghost::blog`.
+
+If you prefer to load everything manually, set `GHOST_ROUTES_AUTO_REGISTER=false` and use the `Route::ghostDomain()` macro in `routes/web.php` for each domain:
+
+```php
+use Illuminate\Support\Facades\Route;
+
+// Registers robots, sitemap, ads, and loads the closure:
+Route::ghostDomain('example.com', function () {
+    require base_path('routes/domains/example_com.php');
 });
 ```
 
-`page()` passes `$content` and `$seo` to the view; `blog()` adds `$dataBlog` and `$page`. Without
-`viewPath` the package falls back to `multidomain-ghost::page` / `multidomain-ghost::blog`.
+The `www` redirect is enabled by default. Set `GHOST_ROUTES_REDIRECT_WWW=false` to opt out.
 
 ### Catch-all page resolution
 

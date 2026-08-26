@@ -90,7 +90,44 @@ PHP;
             $this->line("<comment>! Config override already exists:</comment> config/domains/{$sanitized}.php");
         }
 
-        // 3. Create view folder & scaffold views
+        // 3. Create route file routes/domains/{sanitized}.php
+        $routeDir = base_path('routes/domains');
+        if (! is_dir($routeDir)) {
+            mkdir($routeDir, 0755, true);
+        }
+
+        $routeFile = "{$routeDir}/{$sanitized}.php";
+        if (! file_exists($routeFile) || $this->option('force')) {
+            $routeNamePrefix = str_replace(['.', '-'], '_', $domain);
+            $routeStub = <<<PHP
+<?php
+
+use Illuminate\Support\Facades\Route;
+use MrSonj\MultiDomainGhost\Http\Controllers\GhostController;
+
+Route::get('/', [GhostController::class, 'page'])
+    ->name('{$routeNamePrefix}_home')
+    ->defaults('viewPath', '{$sanitized}/home');
+
+Route::get('/blog', [GhostController::class, 'blog'])
+    ->name('{$routeNamePrefix}_blog')
+    ->defaults('viewPath', '{$sanitized}/blog');
+
+Route::get('/blog/{slug}', [GhostController::class, 'page'])
+    ->name('{$routeNamePrefix}_post')
+    ->defaults('viewPath', '{$sanitized}/post')
+    ->where('slug', '[A-Za-z0-9\-_]+');
+
+Route::get('/feed', [GhostController::class, 'feed'])
+    ->name('{$routeNamePrefix}_feed');
+PHP;
+            file_put_contents($routeFile, $routeStub."\n");
+            $this->line("<info>✓ Route file ready:</info> routes/domains/{$sanitized}.php");
+        } else {
+            $this->line("<comment>! Route file already exists:</comment> routes/domains/{$sanitized}.php");
+        }
+
+        // 4. Create view folder & scaffold views
         $viewDir = resource_path("views/{$sanitized}");
         if (! is_dir($viewDir)) {
             mkdir($viewDir, 0755, true);
@@ -98,7 +135,7 @@ PHP;
         }
         $this->scaffoldViews($sanitized, $domain);
 
-        // 4. Create CSS file
+        // 5. Create CSS file
         $cssFile = resource_path("css/{$sanitized}.css");
         if (! file_exists($cssFile) || $this->option('force')) {
             @mkdir(dirname($cssFile), 0755, true);
@@ -137,10 +174,10 @@ PHP;
             $this->line("<info>✓ CSS file ready:</info> resources/css/{$sanitized}.css");
         }
 
-        // 5. Auto-inject CSS entry into vite.config.js
+        // 6. Auto-inject CSS entry into vite.config.js
         $this->injectViteConfig($sanitized);
 
-        // 6. Auto-update local Herd config if present
+        // 7. Auto-update local Herd config if present
         $this->updateHerdConfig($domain);
 
         if (file_exists(base_path(".env.{$domain}"))) {

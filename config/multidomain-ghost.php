@@ -47,17 +47,14 @@ return [
         // Every unmatched URL becomes a Ghost lookup though - scanner traffic included -
         // so this stays opt-in.
         'catch_all' => filter_var(env('GHOST_ROUTES_CATCH_ALL', false), FILTER_VALIDATE_BOOL),
-        // Where each route lives. null drops the route; renaming a path keeps its route
-        // name and viewPath. Applies to every domain - routes are registered once for
-        // all of them, so config/domains/*.php cannot vary this per domain.
+        // Only the standard files, whose location is dictated by the crawlers reading
+        // them rather than chosen by the site. null leaves that route unregistered.
+        // Content routes are an editorial choice and vary per domain, so they live in
+        // routes/domains/{domain_key}.php instead of in one map shared by every domain.
         'paths' => [
-            'home' => '/',
             'sitemap' => '/sitemap.xml',
-            'feed' => '/feed',
             'robots' => '/robots.txt',
-            'blog' => '/blog',
-            'post' => '/blog/{slug}',
-            'ads' => null,
+            'ads' => '/ads.txt',
         ],
         'middleware' => ['web'],
         'redirect_www' => filter_var(env('GHOST_ROUTES_REDIRECT_WWW', true), FILTER_VALIDATE_BOOL),
