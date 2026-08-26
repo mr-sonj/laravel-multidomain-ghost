@@ -69,21 +69,24 @@ return [
         'blog' => 'multidomain-ghost::blog',
     ],
     // {domain} and {domain_key} expand to the active hostname and its
-    // directory-safe form (example.com / example_com).
+    // directory-safe form (example.com / example_com). Every key below is a
+    // default: override any of them per domain in config/domains/{domain_key}.php.
     'seo' => [
         'default_image' => env(
             'GHOST_SEO_DEFAULT_IMAGE',
             'https://{domain}/img/{domain_key}/apple-touch-icon.png',
         ),
     ],
+    // Consulted only when the domain has no resources/domains/{domain_key}/robots.txt.
+    // That file, when present, replaces this whole block.
     'robots' => [
-        'content_signal' => env('ROBOTS_CONTENT_SIGNAL', ''),
+        'content_signal' => env('GHOST_ROBOTS_CONTENT_SIGNAL', ''),
         'sitemap' => env('GHOST_ROBOTS_SITEMAP', 'https://{domain}/sitemap.xml'),
         'disallow' => ['/cdn-cgi/'],
     ],
-    'ads' => [
-        'txt' => env('GHOST_ADS_TXT', ''),
-    ],
+    // There is deliberately no 'ads' block. An ads.txt belongs to one publisher
+    // account, so no value here could be shared across domains honestly. Each
+    // domain's file lives at resources/domains/{domain_key}/ads.txt.
     'enrichers' => [],
     'transformer' => null,
 ];
