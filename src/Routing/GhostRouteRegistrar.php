@@ -66,7 +66,10 @@ class GhostRouteRegistrar
                 Route::name("{$routeNamePrefix}_feed")
                     ->get('/feed', [GhostController::class, 'feed']);
 
-                Route::get('/ads.txt', [GhostController::class, 'ads']);
+                $adsTxt = (string) (config('multidomain-ghost.ads.txt') ?: config('services.adsense.ads_txt', ''));
+                if (trim($adsTxt) !== '') {
+                    Route::get('/ads.txt', [GhostController::class, 'ads']);
+                }
 
                 Route::name("{$routeNamePrefix}_home")
                     ->get('/', [GhostController::class, 'page'])

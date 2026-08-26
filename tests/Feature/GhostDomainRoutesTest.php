@@ -234,4 +234,47 @@ class GhostDomainRoutesTest extends TestCase
         $this->assertCount($initialDomainRouteCount, Route::getRoutes());
         $this->assertTrue(Route::has('fresh_example_com_home'));
     }
+
+    public function test_ads_txt_route_is_not_registered_when_config_is_empty(): void
+    {
+        config()->set('multidomain-ghost.ads.txt', '');
+        config()->set('services.adsense.ads_txt', '');
+
+        $this->setRegisteredDomains(['example_com' => []]);
+        GhostRouteRegistrar::registerAll();
+
+        $this->get('https://example.com/ads.txt')->assertNotFound();
+    }
+
+    public function test_ads_txt_route_is_registered_when_package_config_is_present(): void
+    {
+        config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
+        config()->set('multidomain-ghost.ads.txt', 'google.com, pub-123, DIRECT');
+        config()->set('services.adsense.ads_txt', '');
+
+        $this->setRegisteredDomains(['example_com' => []]);
+        GhostRouteRegistrar::registerAll();
+
+        $response = $this->get('https://example.com/ads.txt');
+
+        $response->assertOk();
+        $response->assertSee('google.com, pub-123, DIRECT', false);
+        $this->assertSame('text/plain;charset=UTF-8', $response->headers->get('Content-Type'));
+    }
+
+    public function test_ads_txt_route_is_registered_when_legacy_config_is_present(): void
+    {
+        config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
+        config()->set('multidomain-ghost.ads.txt', '');
+        config()->set('services.adsense.ads_txt', 'google.com, pub-456, DIRECT');
+
+        $this->setRegisteredDomains(['example_com' => []]);
+        GhostRouteRegistrar::registerAll();
+
+        $response = $this->get('https://example.com/ads.txt');
+
+        $response->assertOk();
+        $response->assertSee('google.com, pub-456, DIRECT', false);
+        $this->assertSame('text/plain;charset=UTF-8', $response->headers->get('Content-Type'));
+    }
 }
