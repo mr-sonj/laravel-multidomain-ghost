@@ -33,11 +33,13 @@ class GhostDomainRoutesTest extends TestCase
 
     public function test_macro_registers_all_ghost_routes_for_domain(): void
     {
+        config()->set('multidomain-ghost.ads.txt', 'test');
         Route::ghostDomain('example.com');
 
         $this->assertTrue(Route::has('example_com_robots'));
         $this->assertTrue(Route::has('example_com_sitemap'));
         $this->assertTrue(Route::has('example_com_feed'));
+        $this->assertTrue(Route::has('example_com_ads'));
         $this->assertTrue(Route::has('example_com_home'));
         $this->assertTrue(Route::has('example_com_blog'));
         $this->assertTrue(Route::has('example_com_post'));
@@ -61,12 +63,14 @@ class GhostDomainRoutesTest extends TestCase
 
     public function test_macro_handles_domains_with_hyphens(): void
     {
+        config()->set('multidomain-ghost.ads.txt', 'test');
         Route::ghostDomain('my-sample-blog.co.uk');
 
         $this->assertTrue(Route::has('my_sample_blog_co_uk_robots'));
         $this->assertTrue(Route::has('my_sample_blog_co_uk_home'));
         $this->assertTrue(Route::has('my_sample_blog_co_uk_blog'));
         $this->assertTrue(Route::has('my_sample_blog_co_uk_post'));
+        $this->assertTrue(Route::has('my_sample_blog_co_uk_ads'));
         $this->assertTrue(Route::has('my_sample_blog_co_uk_www_redirect'));
 
         $homeRoute = Route::getRoutes()->getByName('my_sample_blog_co_uk_home');
