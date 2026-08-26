@@ -100,23 +100,32 @@ Everything below is optional.
 ## Route customization & explicit declaration
 
 By default, registered domains automatically have their Ghost routes loaded
-(`multidomain-ghost.routes.auto_register`). You can change paths or disable specific routes using
-the `routes.paths` map in `config/multidomain-ghost.php`:
+(`multidomain-ghost.routes.auto_register`). The `routes.paths` map in
+`config/multidomain-ghost.php` decides where each route lives, and `null` leaves it
+unregistered:
 
 ```php
 'routes' => [
-    'catch_all' => false, // Set to true to automatically resolve any unhandled paths to Ghost pages
     'paths' => [
         'home'    => '/',
         'sitemap' => '/sitemap.xml',
         'feed'    => '/feed',
         'robots'  => '/robots.txt',
-        'blog'    => '/blog',          // set to null to disable
-        'post'    => '/blog/{slug}',   // set to null to disable
-        'ads'     => null,             // only registered if ads.txt has content
+        'blog'    => '/news',          // moved; the route is still named {domain}_blog
+        'post'    => '/news/{slug}',   // set either to null to drop the route entirely
+        'ads'     => null,                // null means /ads.txt, registered only when it has content
     ],
 ],
 ```
+
+Renaming a path keeps the route name and the `viewPath` default, so `route('example_com_blog')`
+and `resources/views/example_com/blog.blade.php` carry on working unchanged.
+
+> [!IMPORTANT]
+> `routes.paths` is global. Routes are registered once for every domain, so this map cannot be
+> varied per domain from `config/domains/*.php` — an override there applies to every domain in
+> the request. To give one domain its own paths, set `GHOST_ROUTES_AUTO_REGISTER=false` and
+> declare each domain with the `Route::ghostDomain()` macro instead.
 
 To attach domain-specific custom routes, or declare standard routes manually at a specific point (after setting `GHOST_ROUTES_AUTO_REGISTER=false`), you can use the `Route::ghostDomain()` macro:
 
@@ -150,6 +159,19 @@ Route::domain('example.com')->group(function () {
 `page()` passes `$content` and `$seo` to the view; `blog()` adds `$dataBlog` and `$page`. Without
 `viewPath` the package falls back to `multidomain-ghost::page` / `multidomain-ghost::blog`.
 
+### Catch-all page resolution
+
+Set `catch_all` (or `GHOST_ROUTES_CATCH_ALL=true`) to resolve any otherwise unmatched path
+against Ghost by canonical URL, which is what lets `/about` or `/chinh-sach` work without a route
+declaration each. It is always registered last — after the routes above and after anything a
+`Route::ghostDomain()` closure adds, whenever it adds it — so it never shadows a real route.
+
+> [!WARNING]
+> A catch-all turns **every** unmatched URL into a Ghost lookup, including `/.env`,
+> `/wp-admin/setup.php` and other scanner traffic. That undoes the protection the `post` slug
+> constraint gives you, and each distinct URL takes its own negative-cache entry
+> (`GHOST_CACHE_MISS_TTL`). Leave it off unless you need it, and keep rate limiting in front of it.
+
 ## Per-domain configuration
 
 `config/domains/example_com.php` is loaded after the base configuration when `example.com` is
@@ -160,15 +182,14 @@ return [
     'app.name' => 'Example Website',
     'app.url' => 'https://example.com',
     'cache.prefix' => 'example_com_cache',
-    
-    // Example: translate the blog paths for this specific domain
-    'multidomain-ghost.routes.paths.blog' => '/tin-tuc',
-    'multidomain-ghost.routes.paths.post' => '/tin-tuc/{slug}',
 ];
 ```
 
+Route paths are the one thing this cannot override — see
+[Route customization](#route-customization--explicit-declaration).
+
 > [!WARNING]
-> **Ghost canonical URLs must match your routes.** Ghost's default permalink structure is `/{slug}/` at the root. If you use a prefix like `/blog/{slug}` or `/tin-tuc/{slug}` in your Laravel routes, you must update the routing/canonical URLs in Ghost to match. The package finds posts by matching the current URL against the `canonical_url` returned by Ghost.
+> **Ghost canonical URLs must match your routes.** Ghost's default permalink structure is `/{slug}/` at the root. If you use a prefix like `/blog/{slug}` or `/news/{slug}` in your Laravel routes, you must update the routing/canonical URLs in Ghost to match. The package finds posts by matching the current URL against the `canonical_url` returned by Ghost.
 
 Console commands opt into the same context with `--domain`:
 

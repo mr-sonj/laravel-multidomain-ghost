@@ -42,7 +42,14 @@ return [
     'webhook_tolerance' => (int) env('GHOST_WEBHOOK_TOLERANCE', 300),
     'routes' => [
         'auto_register' => filter_var(env('GHOST_ROUTES_AUTO_REGISTER', true), FILTER_VALIDATE_BOOL),
+        // Resolves any otherwise unmatched path against Ghost by canonical URL, so
+        // /about needs no route of its own. Registered last, after your own routes.
+        // Every unmatched URL becomes a Ghost lookup though - scanner traffic included -
+        // so this stays opt-in.
         'catch_all' => filter_var(env('GHOST_ROUTES_CATCH_ALL', false), FILTER_VALIDATE_BOOL),
+        // Where each route lives. null drops the route; renaming a path keeps its route
+        // name and viewPath. Applies to every domain - routes are registered once for
+        // all of them, so config/domains/*.php cannot vary this per domain.
         'paths' => [
             'home' => '/',
             'sitemap' => '/sitemap.xml',

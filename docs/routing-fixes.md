@@ -189,7 +189,7 @@ Closure truyền vào `Route::ghostDomain($domain, $closure)` chạy ở **dòng
 group nhưng *sau khi* cả 7 route đã đăng ký — nên closure chỉ **thêm** được route, không
 **bớt** hay **thay** được route nào.
 
-Hệ quả thực tế: muốn tự quản mỗi `robots.txt`, hoặc muốn đổi `/blog` thành `/tin-tuc`, người
+Hệ quả thực tế: muốn tự quản mỗi `robots.txt`, hoặc muốn đổi `/blog` thành `/news`, người
 dùng buộc phải đặt `GHOST_ROUTES_AUTO_REGISTER=false` rồi **viết tay lại toàn bộ** home,
 blog, post, sitemap, feed, robots, ads và cả nhóm redirect `www`. Chi phí của một sai lệch
 nhỏ là mất trọn bộ scaffold.
@@ -226,7 +226,7 @@ Registrar duyệt bản đồ này thay vì hardcode. `null` = bỏ qua route đ
   `viewPath` defaults → `tests/Feature/GhostDomainRoutesTest.php` phải **pass nguyên trạng,
   không sửa một dòng nào**. Đây là tiêu chí chống hồi quy quan trọng nhất của mục này.
 - Đặt `paths.blog = null` → `Route::has('example_com_blog')` là `false`, 6 route kia còn nguyên.
-- Đặt `paths.blog = '/tin-tuc'` → route tên `example_com_blog` phục vụ `/tin-tuc`, `viewPath`
+- Đặt `paths.blog = '/news'` → route tên `example_com_blog` phục vụ `/news`, `viewPath`
   vẫn là `example_com/blog`.
 
 **Rủi ro:** Trung bình. Đây là thay đổi cấu trúc config công khai. Phải giữ tương thích ngược
@@ -243,7 +243,7 @@ tuyệt đối cho người đang không cấu hình gì. Cập nhật `README.m
 
 **Vấn đề:**
 Package tự nhận là "multi-domain", nhưng ép mọi domain phải dùng đúng tiền tố `/blog`.
-Site tiếng Việt muốn `/tin-tuc`, site tin tức muốn `/news`, landing page không muốn blog nào
+Site tiếng Việt muốn `/news`, site tin tức muốn `/news`, landing page không muốn blog nào
 cả. Không có đường thoát nào ngoài tắt sạch (xem B1).
 
 **Vì sao quan trọng — lý do sâu hơn chỉ là "thiếu linh hoạt":**
@@ -274,7 +274,7 @@ cd /Volumes/Workspaces/Projects/herd_sites/multi_domain
 `paths.post` đọc từ config. Việc còn lại là **tài liệu hoá**: README phải nói rõ đổi đường
 dẫn ở đâu, và nói rõ canonical URL trong Ghost phải khớp với đường dẫn đã chọn.
 
-**Xong khi:** README có ví dụ đổi `/blog` → `/tin-tuc` cho một domain cụ thể, và ví dụ đó
+**Xong khi:** README có ví dụ đổi `/blog` → `/news` cho một domain cụ thể, và ví dụ đó
 chạy được thật trong app.
 
 **Rủi ro:** Thấp nếu B1 đã làm đúng.

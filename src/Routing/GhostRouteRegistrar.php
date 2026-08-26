@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MrSonj\MultiDomainGhost\Routing;
 
 use Closure;
+use Illuminate\Routing\RouteCollection;
 use Illuminate\Routing\RouteCollectionInterface;
 use Illuminate\Support\Facades\Route;
 use MrSonj\MultiDomainGhost\Http\Controllers\GhostController;
@@ -14,6 +15,19 @@ use MrSonj\MultiDomainGhost\Support\DomainRegistry;
 
 class GhostRouteRegistrar
 {
+    /**
+     * Paths used when the published config predates the routes.paths map.
+     */
+    private const DEFAULT_PATHS = [
+        'home' => '/',
+        'sitemap' => '/sitemap.xml',
+        'feed' => '/feed',
+        'robots' => '/robots.txt',
+        'blog' => '/blog',
+        'post' => '/blog/{slug}',
+        'ads' => null,
+    ];
+
     private static ?RouteCollectionInterface $routeCollection = null;
 
     /**
@@ -38,12 +52,17 @@ class GhostRouteRegistrar
         }
 
         $middleware = (array) config('multidomain-ghost.routes.middleware', ['web']);
+        $routeNamePrefix = str_replace(['.', '-'], '_', $domain);
 
         if (isset(self::$registeredDomains[$domain])) {
             if ($routes instanceof Closure) {
                 Route::domain($domain)
                     ->middleware($middleware)
                     ->group($routes);
+
+                // The catch-all this domain already owns now sits before the routes
+                // that closure just added, so it would swallow every one of them.
+                self::moveCatchAllLast("{$routeNamePrefix}_catch_all");
             }
 
             return;
@@ -52,22 +71,13 @@ class GhostRouteRegistrar
         self::$registeredDomains[$domain] = true;
 
         $sanitized = DomainName::dirKey($domain);
-        $routeNamePrefix = str_replace(['.', '-'], '_', $domain);
 
         Route::domain($domain)
             ->middleware($middleware)
             ->group(function () use ($sanitized, $routeNamePrefix, $routes) {
                 $paths = config('multidomain-ghost.routes.paths');
-                if (!is_array($paths)) {
-                    $paths = [
-                        'home' => '/',
-                        'sitemap' => '/sitemap.xml',
-                        'feed' => '/feed',
-                        'robots' => '/robots.txt',
-                        'blog' => '/blog',
-                        'post' => '/blog/{slug}',
-                        'ads' => null,
-                    ];
+                if (! is_array($paths)) {
+                    $paths = self::DEFAULT_PATHS;
                 }
 
                 if (isset($paths['robots']) && is_string($paths['robots'])) {
@@ -85,15 +95,12 @@ class GhostRouteRegistrar
                         ->get($paths['feed'], [GhostController::class, 'feed']);
                 }
 
-                $adsPath = $paths['ads'] ?? null;
-                if ($adsPath === null) {
-                    $adsTxt = (string) (config('multidomain-ghost.ads.txt') ?: config('services.adsense.ads_txt', ''));
-                    if (trim($adsTxt) !== '') {
-                        $adsPath = '/ads.txt';
-                    }
-                }
-                
-                if (is_string($adsPath)) {
+                // null means "wherever ads.txt normally lives"; the content check
+                // applies to an explicit path too, so no configuration can produce
+                // an empty ads.txt served with a 200.
+                $adsPath = $paths['ads'] ?? '/ads.txt';
+
+                if (is_string($adsPath) && self::adsTxtContent() !== '') {
                     Route::name("{$routeNamePrefix}_ads")
                         ->get($adsPath, [GhostController::class, 'ads']);
                 }
@@ -158,5 +165,56 @@ class GhostRouteRegistrar
     {
         self::$routeCollection = null;
         self::$registeredDomains = [];
+    }
+
+    /**
+     * Resolved ads.txt body.
+     *
+     * An empty body means the route must not exist at all: a 200 with an empty
+     * ads.txt reads as "this domain authorises no sellers", which is not the same
+     * claim as having no ads.txt file.
+     */
+    private static function adsTxtContent(): string
+    {
+        $ads = config('multidomain-ghost.ads.txt') ?: config('services.adsense.ads_txt', '');
+
+        return trim((string) $ads);
+    }
+
+    /**
+     * Re-append a catch-all route so it stays the last thing that can match.
+     *
+     * A RouteCollection cannot reorder in place, so this rebuilds it with the
+     * catch-all moved to the end.
+     */
+    private static function moveCatchAllLast(string $routeName): void
+    {
+        $router = Route::getFacadeRoot();
+        $existing = $router->getRoutes();
+
+        if (! $existing instanceof RouteCollection) {
+            return;
+        }
+
+        $catchAll = $existing->getByName($routeName);
+        if ($catchAll === null) {
+            return;
+        }
+
+        $reordered = new RouteCollection;
+
+        foreach ($existing->getRoutes() as $route) {
+            if ($route !== $catchAll) {
+                $reordered->add($route);
+            }
+        }
+
+        $reordered->add($catchAll);
+
+        $router->setRoutes($reordered);
+
+        // setRoutes() swaps in a new collection instance; without this the next
+        // registerDomain() would read it as a fresh one and re-register everything.
+        self::$routeCollection = $router->getRoutes();
     }
 }
