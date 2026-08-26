@@ -173,6 +173,10 @@ class GhostDomainRoutesTest extends TestCase
         $this->setRegisteredDomains(['cached_example_com' => []]);
         $this->app->instance('routes.cached', true);
 
+        if (! $this->app->routesAreCached()) {
+            $this->app['files']->put($this->app->getCachedRoutesPath(), '<?php return [];');
+        }
+
         $this->assertTrue($this->app->routesAreCached());
 
         $this->app['router']->setRoutes(new RouteCollection);
@@ -182,6 +186,10 @@ class GhostDomainRoutesTest extends TestCase
         $this->assertFalse(Route::has('cached_example_com_home'));
         $this->assertFalse(Route::has('multidomain-ghost.webhook'));
         $this->assertCount(0, Route::getRoutes());
+
+        if ($this->app['files']->exists($this->app->getCachedRoutesPath())) {
+            $this->app['files']->delete($this->app->getCachedRoutesPath());
+        }
     }
 
     public function test_macro_does_not_duplicate_default_routes_when_extending_with_custom_routes(): void
