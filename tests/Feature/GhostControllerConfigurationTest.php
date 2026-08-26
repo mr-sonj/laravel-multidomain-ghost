@@ -6,6 +6,7 @@ use MrSonj\MultiDomainGhost\Http\Controllers\GhostController;
 use MrSonj\MultiDomainGhost\Services\GhostContentService;
 use MrSonj\MultiDomainGhost\Support\NullEnricher;
 use MrSonj\MultiDomainGhost\Tests\TestCase;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class GhostControllerConfigurationTest extends TestCase
 {
@@ -66,18 +67,28 @@ class GhostControllerConfigurationTest extends TestCase
         $this->assertStringContainsString('Disallow: /cdn-cgi/', $robots);
     }
 
-    public function test_ads_txt_reads_from_the_package_config(): void
+    public function test_ads_txt_reads_the_domains_own_file(): void
     {
-        $this->app['config']->set('multidomain-ghost.ads.txt', 'google.com, pub-1, DIRECT, f08c');
+        $this->setDomainAssets(['example_com/ads.txt' => "google.com, pub-1, DIRECT, f08c\n"]);
 
         $this->assertSame('google.com, pub-1, DIRECT, f08c', $this->controller()->ads()->getContent());
     }
 
-    public function test_ads_txt_still_honours_the_legacy_services_key(): void
+    public function test_ads_txt_is_not_found_when_the_domain_has_no_file(): void
     {
-        $this->app['config']->set('services.adsense.ads_txt', 'legacy-entry, DIRECT');
+        $this->expectException(NotFoundHttpException::class);
 
-        $this->assertSame('legacy-entry, DIRECT', $this->controller()->ads()->getContent());
+        $this->controller()->ads();
+    }
+
+    public function test_ads_txt_files_are_isolated_per_domain(): void
+    {
+        $this->setDomainAssets(['example_com/ads.txt' => 'google.com, pub-1, DIRECT']);
+
+        $this->assertSame('google.com, pub-1, DIRECT', $this->controller('example.com')->ads()->getContent());
+
+        $this->expectException(NotFoundHttpException::class);
+        $this->controller('other.com')->ads();
     }
 
     public function test_seo_data_falls_back_to_the_active_domain_when_content_has_none(): void

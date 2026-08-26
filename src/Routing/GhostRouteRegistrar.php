@@ -9,6 +9,7 @@ use Illuminate\Routing\RouteCollectionInterface;
 use Illuminate\Support\Facades\Route;
 use MrSonj\MultiDomainGhost\Http\Controllers\GhostController;
 use MrSonj\MultiDomainGhost\Http\Middleware\EnsureRegisteredDomain;
+use MrSonj\MultiDomainGhost\Support\DomainAssets;
 use MrSonj\MultiDomainGhost\Support\DomainName;
 use MrSonj\MultiDomainGhost\Support\DomainRegistry;
 
@@ -63,7 +64,7 @@ class GhostRouteRegistrar
 
         Route::domain($domain)
             ->middleware($middleware)
-            ->group(function () use ($routeNamePrefix, $routes) {
+            ->group(function () use ($domain, $routeNamePrefix, $routes) {
                 $paths = config('multidomain-ghost.routes.paths');
                 if (! is_array($paths)) {
                     $paths = self::DEFAULT_PATHS;
@@ -79,7 +80,11 @@ class GhostRouteRegistrar
                         ->get($paths['sitemap'], [GhostController::class, 'sitemap']);
                 }
 
-                if (isset($paths['ads']) && is_string($paths['ads']) && self::adsTxtContent() !== '') {
+                // Decided from this domain's own file rather than from configuration:
+                // configuration only ever reflects the domain active in this process,
+                // so reading it here would hand one domain's answer to all the others.
+                if (isset($paths['ads']) && is_string($paths['ads'])
+                    && DomainAssets::contents($domain, 'ads.txt') !== null) {
                     Route::name("{$routeNamePrefix}_ads")
                         ->get($paths['ads'], [GhostController::class, 'ads']);
                 }
@@ -147,19 +152,5 @@ class GhostRouteRegistrar
     {
         self::$routeCollection = null;
         self::$registeredDomains = [];
-    }
-
-    /**
-     * Resolved ads.txt body.
-     *
-     * An empty body means the route must not exist at all: a 200 with an empty
-     * ads.txt reads as "this domain authorises no sellers", which is not the same
-     * claim as having no ads.txt file.
-     */
-    private static function adsTxtContent(): string
-    {
-        $ads = config('multidomain-ghost.ads.txt') ?: config('services.adsense.ads_txt', '');
-
-        return trim((string) $ads);
     }
 }

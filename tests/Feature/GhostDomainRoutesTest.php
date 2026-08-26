@@ -34,7 +34,7 @@ class GhostDomainRoutesTest extends TestCase
 
     public function test_macro_registers_all_ghost_routes_for_domain(): void
     {
-        config()->set('multidomain-ghost.ads.txt', 'test');
+        $this->setDomainAssets(['example_com/ads.txt' => 'google.com, pub-1, DIRECT']);
         Route::ghostDomain('example.com');
 
         $this->assertTrue(Route::has('example_com_robots'));
@@ -50,7 +50,7 @@ class GhostDomainRoutesTest extends TestCase
 
     public function test_macro_handles_domains_with_hyphens(): void
     {
-        config()->set('multidomain-ghost.ads.txt', 'test');
+        $this->setDomainAssets(['my-sample-blog_co_uk/ads.txt' => 'google.com, pub-1, DIRECT']);
         Route::ghostDomain('my-sample-blog.co.uk');
 
         $this->assertTrue(Route::has('my_sample_blog_co_uk_robots'));
@@ -213,22 +213,18 @@ class GhostDomainRoutesTest extends TestCase
         $this->assertTrue(Route::has('fresh_example_com_robots'));
     }
 
-    public function test_ads_txt_route_is_not_registered_when_config_is_empty(): void
+    public function test_ads_txt_route_is_not_registered_when_the_domain_has_no_ads_file(): void
     {
-        config()->set('multidomain-ghost.ads.txt', '');
-        config()->set('services.adsense.ads_txt', '');
-
         $this->setRegisteredDomains(['example_com' => []]);
         GhostRouteRegistrar::registerAll();
 
         $this->get('https://example.com/ads.txt')->assertNotFound();
     }
 
-    public function test_ads_txt_route_is_registered_when_package_config_is_present(): void
+    public function test_ads_txt_route_is_registered_when_the_domain_has_an_ads_file(): void
     {
         config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
-        config()->set('multidomain-ghost.ads.txt', 'google.com, pub-123, DIRECT');
-        config()->set('services.adsense.ads_txt', '');
+        $this->setDomainAssets(['example_com/ads.txt' => 'google.com, pub-123, DIRECT']);
 
         $this->setRegisteredDomains(['example_com' => []]);
         GhostRouteRegistrar::registerAll();
@@ -240,20 +236,15 @@ class GhostDomainRoutesTest extends TestCase
         $this->assertSame('text/plain;charset=UTF-8', $response->headers->get('Content-Type'));
     }
 
-    public function test_ads_txt_route_is_registered_when_legacy_config_is_present(): void
+    public function test_ads_route_registration_is_independent_per_domain(): void
     {
-        config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
-        config()->set('multidomain-ghost.ads.txt', '');
-        config()->set('services.adsense.ads_txt', 'google.com, pub-456, DIRECT');
+        $this->setDomainAssets(['example_com/ads.txt' => 'google.com, pub-123, DIRECT']);
 
-        $this->setRegisteredDomains(['example_com' => []]);
+        $this->setRegisteredDomains(['example_com' => [], 'other_com' => []]);
         GhostRouteRegistrar::registerAll();
 
-        $response = $this->get('https://example.com/ads.txt');
-
-        $response->assertOk();
-        $response->assertSee('google.com, pub-456, DIRECT', false);
-        $this->assertSame('text/plain;charset=UTF-8', $response->headers->get('Content-Type'));
+        $this->assertTrue(Route::has('example_com_ads'));
+        $this->assertFalse(Route::has('other_com_ads'));
     }
 
     public function test_catch_all_route_is_registered_after_custom_closure_when_enabled(): void
@@ -284,11 +275,9 @@ class GhostDomainRoutesTest extends TestCase
         $this->assertLessThan($catchAllIndex, $customIndex);
     }
 
-    public function test_ads_txt_route_is_not_registered_when_an_explicit_path_has_no_content(): void
+    public function test_ads_txt_route_is_not_registered_when_an_explicit_path_has_no_file(): void
     {
         config()->set('multidomain-ghost.routes.paths.ads', '/ads.txt');
-        config()->set('multidomain-ghost.ads.txt', '');
-        config()->set('services.adsense.ads_txt', '');
 
         $this->setRegisteredDomains(['example_com' => []]);
         GhostRouteRegistrar::registerAll();
@@ -297,11 +286,11 @@ class GhostDomainRoutesTest extends TestCase
         $this->get('https://example.com/ads.txt')->assertNotFound();
     }
 
-    public function test_ads_txt_route_honours_an_explicit_path_when_content_is_present(): void
+    public function test_ads_txt_route_honours_an_explicit_path_when_a_file_is_present(): void
     {
         config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
         config()->set('multidomain-ghost.routes.paths.ads', '/app-ads.txt');
-        config()->set('multidomain-ghost.ads.txt', 'google.com, pub-789, DIRECT');
+        $this->setDomainAssets(['example_com/ads.txt' => 'google.com, pub-789, DIRECT']);
 
         $this->setRegisteredDomains(['example_com' => []]);
         GhostRouteRegistrar::registerAll();
@@ -313,9 +302,9 @@ class GhostDomainRoutesTest extends TestCase
     public function test_a_path_set_to_null_disables_only_that_route(): void
     {
         config()->set('multidomain-ghost.routes.paths.sitemap', null);
-        // ads.txt is registered only when it has a body, so give it one: without this
-        // the loop below would pass for the wrong reason.
-        config()->set('multidomain-ghost.ads.txt', 'google.com, pub-123, DIRECT');
+        // ads.txt is registered only for a domain that owns the file, so give it one:
+        // without this the loop below would pass for the wrong reason.
+        $this->setDomainAssets(['example_com/ads.txt' => 'google.com, pub-123, DIRECT']);
 
         Route::ghostDomain('example.com');
 
@@ -444,7 +433,7 @@ PHP
     public function test_ads_path_set_to_null_disables_the_route(): void
     {
         config()->set('multidomain-ghost.routes.paths.ads', null);
-        config()->set('multidomain-ghost.ads.txt', 'google.com, pub-123, DIRECT');
+        $this->setDomainAssets(['example_com/ads.txt' => 'google.com, pub-123, DIRECT']);
 
         Route::ghostDomain('example.com');
 

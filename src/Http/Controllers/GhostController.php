@@ -15,6 +15,7 @@ use MrSonj\MultiDomainGhost\Http\Middleware\EnsureRegisteredDomain;
 use MrSonj\MultiDomainGhost\Services\GhostCacheManager;
 use MrSonj\MultiDomainGhost\Services\GhostContentService;
 use MrSonj\MultiDomainGhost\Support\Domain;
+use MrSonj\MultiDomainGhost\Support\DomainAssets;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class GhostController extends Controller
@@ -180,12 +181,24 @@ class GhostController extends Controller
             ->header('Content-Type', 'text/plain;charset=UTF-8');
     }
 
+    /**
+     * The domain's own ads.txt, served verbatim.
+     *
+     * Verbatim because ads.txt is an IAB format: any rewriting of it is a risk.
+     * 404 rather than an empty 200 because an empty ads.txt is itself a claim -
+     * that the domain authorises no sellers - which a domain without the file is
+     * not making. The registrar leaves the route unregistered in that case; this
+     * guard covers a route the application declared for itself.
+     */
     public function ads(): Response
     {
-        $ads = config('multidomain-ghost.ads.txt')
-            ?: config('services.adsense.ads_txt', '');
+        $ads = DomainAssets::contents($this->domain, 'ads.txt');
 
-        return response(trim((string) $ads))->header('Content-Type', 'text/plain;charset=UTF-8');
+        if ($ads === null) {
+            abort(404);
+        }
+
+        return response($ads)->header('Content-Type', 'text/plain;charset=UTF-8');
     }
 
     /**
