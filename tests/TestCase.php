@@ -11,7 +11,9 @@ abstract class TestCase extends BaseTestCase
 {
     private ?string $temporaryConfigPath = null;
 
-    private array $temporaryRouteFiles = [];
+    private array $temporaryFiles = [];
+
+    private array $temporaryDirectories = [];
 
     protected function getPackageProviders($app): array
     {
@@ -49,16 +51,33 @@ abstract class TestCase extends BaseTestCase
 
     protected function setDomainRouteFiles(array $files): void
     {
+        $this->writeTemporaryFiles(base_path('routes/domains'), $files);
+    }
+
+    /**
+     * @param  array<string, string>  $files  Paths relative to resources/domains.
+     */
+    protected function setDomainAssets(array $files): void
+    {
+        $this->writeTemporaryFiles(base_path('resources/domains'), $files);
+    }
+
+    private function writeTemporaryFiles(string $root, array $files): void
+    {
         $fs = new Filesystem;
-        $dir = base_path('routes/domains');
-        if (! is_dir($dir)) {
-            $fs->makeDirectory($dir, 0755, true);
-        }
 
         foreach ($files as $name => $content) {
-            $path = "{$dir}/{$name}";
+            $path = "{$root}/{$name}";
+
+            foreach ([$root, dirname($path)] as $directory) {
+                if (! is_dir($directory)) {
+                    $fs->makeDirectory($directory, 0755, true);
+                    $this->temporaryDirectories[] = $directory;
+                }
+            }
+
             $fs->put($path, $content);
-            $this->temporaryRouteFiles[] = $path;
+            $this->temporaryFiles[] = $path;
         }
     }
 
@@ -70,15 +89,23 @@ abstract class TestCase extends BaseTestCase
             (new Filesystem)->deleteDirectory($this->temporaryConfigPath);
         }
 
-        if ($this->temporaryRouteFiles !== []) {
-            $fs = new Filesystem;
-            foreach ($this->temporaryRouteFiles as $file) {
-                if (is_file($file)) {
-                    $fs->delete($file);
-                }
+        $fs = new Filesystem;
+
+        foreach ($this->temporaryFiles as $file) {
+            if (is_file($file)) {
+                $fs->delete($file);
             }
-            $this->temporaryRouteFiles = [];
         }
+
+        $this->temporaryFiles = [];
+
+        foreach (array_reverse($this->temporaryDirectories) as $directory) {
+            if (is_dir($directory) && $fs->isEmptyDirectory($directory)) {
+                $fs->deleteDirectory($directory);
+            }
+        }
+
+        $this->temporaryDirectories = [];
 
         parent::tearDown();
     }
