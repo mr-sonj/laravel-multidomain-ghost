@@ -82,7 +82,8 @@ class GhostRouteRegistrar
 
                 Route::name("{$routeNamePrefix}_post")
                     ->get('/blog/{slug}', [GhostController::class, 'page'])
-                    ->defaults('viewPath', "{$sanitized}/post");
+                    ->defaults('viewPath', "{$sanitized}/post")
+                    ->where('slug', '[A-Za-z0-9\-_]+');
 
                 if ($routes instanceof Closure) {
                     $routes();
