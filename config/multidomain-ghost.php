@@ -42,6 +42,16 @@ return [
     'webhook_tolerance' => (int) env('GHOST_WEBHOOK_TOLERANCE', 300),
     'routes' => [
         'auto_register' => filter_var(env('GHOST_ROUTES_AUTO_REGISTER', true), FILTER_VALIDATE_BOOL),
+        'catch_all' => filter_var(env('GHOST_ROUTES_CATCH_ALL', false), FILTER_VALIDATE_BOOL),
+        'paths' => [
+            'home' => '/',
+            'sitemap' => '/sitemap.xml',
+            'feed' => '/feed',
+            'robots' => '/robots.txt',
+            'blog' => '/blog',
+            'post' => '/blog/{slug}',
+            'ads' => null,
+        ],
         'middleware' => ['web'],
         'redirect_www' => filter_var(env('GHOST_ROUTES_REDIRECT_WWW', true), FILTER_VALIDATE_BOOL),
         'webhook' => [

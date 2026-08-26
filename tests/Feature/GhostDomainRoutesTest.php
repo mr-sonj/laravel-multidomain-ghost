@@ -281,4 +281,30 @@ class GhostDomainRoutesTest extends TestCase
         $response->assertSee('google.com, pub-456, DIRECT', false);
         $this->assertSame('text/plain;charset=UTF-8', $response->headers->get('Content-Type'));
     }
+
+    public function test_catch_all_route_is_registered_after_custom_closure_when_enabled(): void
+    {
+        config()->set('multidomain-ghost.routes.catch_all', true);
+
+        Route::ghostDomain('catch-all.com', function () {
+            Route::name('catch_all_com_custom')->get('/custom', fn () => 'custom');
+        });
+
+        $this->assertTrue(Route::has('catch_all_com_catch_all'));
+        
+        $catchAllRoute = Route::getRoutes()->getByName('catch_all_com_catch_all');
+        $this->assertNotNull($catchAllRoute);
+        $this->assertSame('catch-all.com', $catchAllRoute->getDomain());
+        $this->assertSame('catch-all_com/page', $catchAllRoute->defaults['viewPath']);
+        $this->assertSame(GhostController::class.'@page', ltrim($catchAllRoute->getActionName(), '\\'));
+
+        // Verify that custom route comes before catch-all in route collection
+        $routeNames = array_map(fn ($r) => $r->getName(), Route::getRoutes()->getRoutes());
+        $customIndex = array_search('catch_all_com_custom', $routeNames, true);
+        $catchAllIndex = array_search('catch_all_com_catch_all', $routeNames, true);
+
+        $this->assertNotFalse($customIndex);
+        $this->assertNotFalse($catchAllIndex);
+        $this->assertLessThan($catchAllIndex, $customIndex);
+    }
 }
