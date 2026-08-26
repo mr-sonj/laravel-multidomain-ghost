@@ -23,6 +23,20 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * Drop a key from the package config the way a published file that never
+     * declared it would. Setting it to null is not the same thing: the key still
+     * exists, so config()'s own default never applies.
+     */
+    protected function forgetConfigKey(string $key): void
+    {
+        $config = (array) $this->app['config']->get('multidomain-ghost');
+
+        unset($config[$key]);
+
+        $this->app['config']->set('multidomain-ghost', $config);
+    }
+
+    /**
      * @param  array<string, array<mixed>>  $domains
      */
     protected function setRegisteredDomains(array $domains): void

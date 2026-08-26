@@ -162,7 +162,10 @@ class MultiDomainGhostServiceProvider extends ServiceProvider
         $webhook = (array) config('multidomain-ghost.routes.webhook', []);
 
         if ($webhook['enabled'] ?? true) {
-            Route::middleware((array) ($webhook['middleware'] ?? []))
+            // Ghost retries a failed delivery, and the endpoint stays unauthenticated
+            // until the signature is checked, so the throttle is a default rather than
+            // something an application has to remember to configure.
+            Route::middleware((array) ($webhook['middleware'] ?? ['throttle:500,1']))
                 ->post((string) ($webhook['uri'] ?? 'webhook/ghost/post'), GhostWebhookController::class)
                 ->name('multidomain-ghost.webhook');
         }

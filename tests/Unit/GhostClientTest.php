@@ -55,6 +55,22 @@ class GhostClientTest extends TestCase
         ));
     }
 
+    public function test_the_admin_token_audience_defaults_to_the_ghost_v5_value(): void
+    {
+        // Ghost v5+ expects `aud: /admin/`. The published config used to carry that
+        // value, so the code default was never exercised; now that the key is gone
+        // from the shipped file, the default is the only thing setting it.
+        $this->forgetConfigKey('jwt_audience');
+
+        $token = (new GhostClient('example.com', true))
+            ->get_admin_token('key:'.str_repeat('a', 64));
+
+        [, $payload] = explode('.', $token);
+        $claims = json_decode(base64_decode(strtr($payload, '-_', '+/')), true);
+
+        $this->assertSame('/admin/', $claims['aud']);
+    }
+
     public function test_sitemap_links_include_posts(): void
     {
         $this->app['config']->set('multidomain-ghost.url', 'https://cms.example.com');

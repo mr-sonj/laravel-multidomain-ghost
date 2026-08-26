@@ -110,14 +110,14 @@ Everything below is optional.
 
 By default, registered domains automatically load the content routes declared in their respective `routes/domains/{domain_key}.php` files, as well as the standard Ghost routes (`sitemap.xml`, `robots.txt`, `ads.txt`).
 
-The `routes.paths` map in `config/multidomain-ghost.php` decides where the three standard web files live. Setting any of them to `null` leaves the route unregistered:
+A `routes.paths` map in `config/multidomain-ghost.php` decides where the three standard web files live. It is not in the published file — whatever you add is merged over the defaults (`/sitemap.xml`, `/robots.txt`, `/ads.txt`), so one entry can be relocated, or set to `null` to leave that route unregistered, without restating the other two:
 
 ```php
 'routes' => [
     'paths' => [
-        'sitemap' => '/sitemap.xml',
-        'robots'  => '/robots.txt',
-        'ads'     => '/ads.txt',
+        'sitemap' => '/sitemap-index.xml',  // relocated
+        'ads' => null,                      // not registered
+        // robots stays at /robots.txt
     ],
 ],
 ```
@@ -159,7 +159,7 @@ Route::ghostDomain('example.com', function () {
 });
 ```
 
-The `www` redirect is enabled by default. Set `GHOST_ROUTES_REDIRECT_WWW=false` to opt out.
+The `www` redirect is enabled by default. Set `routes.redirect_www` to `false` to opt out.
 
 ### Catch-all page resolution
 
@@ -172,7 +172,7 @@ declaration each. It is always registered last — after the routes above and af
 > A catch-all turns **every** unmatched URL into a Ghost lookup, including `/.env`,
 > `/wp-admin/setup.php` and other scanner traffic. That undoes the protection the `post` slug
 > constraint gives you, and each distinct URL takes its own negative-cache entry
-> (`GHOST_CACHE_MISS_TTL`). Leave it off unless you need it, and keep rate limiting in front of it.
+> (`cache.miss_ttl`). Leave it off unless you need it, and keep rate limiting in front of it.
 
 ## Per-domain configuration
 
@@ -261,24 +261,30 @@ route still held by a long-running process return 404.
 
 ## Ghost API options
 
+`config/multidomain-ghost.php` carries only the keys worth deciding per deployment, and each is
+reachable from `.env`:
+
 | Variable | Default | Description |
 | --- | --- | --- |
 | `GHOST_URL` | none | Ghost site or Content API base URL. |
 | `GHOST_CONTENT_KEY` | none | Content API key. |
+| `GHOST_ADMIN_URL` | none | Admin API base URL. |
+| `GHOST_ADMIN_KEY` | none | Admin API key, `id:hex_secret`. |
+| `GHOST_API_MODE` | `auto` | `auto`, `content` or `admin`. |
 | `GHOST_API_VERSION` | `v6.0` | Ghost `Accept-Version` header. |
 | `GHOST_TIMEOUT` | `10` | HTTP timeout in seconds. |
-| `GHOST_RETRY_TIMES` | `2` | HTTP retry count. |
-| `GHOST_VERIFY_SSL` | `true` | TLS certificate verification. |
-| `GHOST_WEBHOOK_SECRET` | none | HMAC secret shared with the Ghost webhook. |
-| `GHOST_CACHE_ENABLED` | `true` in production | Opt into caching locally to reproduce bugs. |
+| `GHOST_CACHE_ENABLED` | on outside `local` | Opt into caching locally to reproduce bugs. |
+| `GHOST_CACHE_STORE` | auto-provisioned | Store Ghost content lives in. |
 | `GHOST_CACHE_TTL` | 30 days | Cached content lifetime, in seconds. |
-| `GHOST_CACHE_MISS_TTL` | `300` | Lifetime of a cached "not found" answer. |
-| `GHOST_CACHE_EMPTY_TTL` | `300` | Lifetime of a cached empty response. |
-| `GHOST_CACHE_PREFIX` | `multidomain_ghost` | Prefix of the shared Ghost cache store. |
+| `GHOST_ROUTES_AUTO_REGISTER` | `true` | Register every registered domain's routes. |
+| `GHOST_ROUTES_CATCH_ALL` | `false` | Resolve unmatched paths against Ghost. |
+| `GHOST_WEBHOOK_SECRET` | none | HMAC secret shared with the Ghost webhook. |
 | `GHOST_MAX_BLOG_PAGE` | `200` | Highest `?page=` served on blog and feed routes; past it, 404. |
-| `GHOST_SEO_DEFAULT_IMAGE` | — | Template for the fallback social image. |
+| `GHOST_ROBOTS_CONTENT_SIGNAL` | none | `Content-Signal:` line in the generated robots.txt. |
 
-The Admin API can stand in during local development:
+`auto` uses Admin credentials only in the local environment when both are present; `content` and
+`admin` select one explicitly. The Admin API is what makes drafts readable, so it is how an
+unpublished post is previewed locally:
 
 ```dotenv
 GHOST_ADMIN_URL=https://cms.example.com
@@ -286,16 +292,45 @@ GHOST_ADMIN_KEY=id:hex_secret
 GHOST_API_MODE=auto
 ```
 
-`auto` uses Admin credentials only in the local environment when both are present; `content` and
-`admin` select one explicitly. See `config/multidomain-ghost.php` for retry delays, webhook
-tolerance, route middleware, view names and extension bindings.
+### Everything else
+
+The keys below are **not** in the published file and have no environment variable. Each has a
+default in the package; add the key to `config/multidomain-ghost.php` to override one.
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `jwt_audience` | `/admin/` | `aud` claim of the Admin API token. |
+| `verify_ssl` | `true` | TLS certificate verification. |
+| `retry_times` | `2` | HTTP retry count. |
+| `retry_sleep` | `200` | Milliseconds between retries. |
+| `cache.prefix` | `multidomain_ghost` | Prefix of the shared Ghost cache store. |
+| `cache.miss_ttl` | `300` | Lifetime of a cached "not found" answer; `0` disables it. |
+| `cache.empty_ttl` | `300` | Lifetime of a cached empty response. |
+| `domain_tag_prefix` | `hash-` | Prefix of the Ghost tag each domain is filtered by. |
+| `allow_unsigned_webhooks` | `false` | Accept webhooks with no signature. Development only. |
+| `webhook_tolerance` | `300` | Seconds a webhook signature stays valid. |
+| `routes.paths` | `/sitemap.xml`, `/robots.txt`, `/ads.txt` | Merged over the defaults, so one entry can be relocated or set to `null` on its own. |
+| `routes.middleware` | `['web']` | Middleware wrapping every domain's routes. |
+| `routes.redirect_www` | `true` | 301 `www.` to the bare domain. |
+| `routes.webhook.enabled` | `true` | Register the webhook route. |
+| `routes.webhook.uri` | `webhook/ghost/post` | Webhook path. |
+| `routes.webhook.middleware` | `['throttle:500,1']` | Rate limit on the webhook route. |
+| `views.page` / `views.blog` | `multidomain-ghost::page` / `::blog` | Fallback views. |
+| `seo.default_image` | `https://{domain}/img/{domain_key}/apple-touch-icon.png` | Template for the fallback social image. |
+| `robots.sitemap` | `https://{domain}/sitemap.xml` | `Sitemap:` line in the generated robots.txt. |
+| `robots.disallow` | `['/cdn-cgi/']` | `Disallow:` lines in the generated robots.txt. |
+
+`{domain}` and `{domain_key}` expand to the active hostname and its directory-safe form
+(`example.com` / `example_com`). A per-domain override belongs in `config/domains/{domain_key}.php`
+rather than here.
 
 ## Webhooks and cache invalidation
 
 Point a Ghost webhook at `https://your-laravel-app.com/webhook/ghost/post`. The route is registered
 outside the `web` middleware group, so no CSRF exception is needed; requests are verified with
 `X-Ghost-Signature` and `GHOST_WEBHOOK_SECRET`. Unsigned webhooks are rejected unless
-`GHOST_ALLOW_UNSIGNED_WEBHOOKS=true`, which belongs only in a controlled development environment.
+`allow_unsigned_webhooks` is set to `true` in the config file, which belongs only in a
+controlled development environment.
 
 Post, page, slug and blog listing caches are invalidated for every affected registered domain.
 
@@ -315,16 +350,14 @@ php artisan cache:clear multidomain-ghost
 ```php
 'cache' => [
     'store' => env('GHOST_CACHE_STORE'),          // null: auto-provision
-    'prefix' => env('GHOST_CACHE_PREFIX', 'multidomain_ghost'),
     'ttl' => (int) env('GHOST_CACHE_TTL', 60 * 60 * 24 * 30),
-    'miss_ttl' => (int) env('GHOST_CACHE_MISS_TTL', 300),
-    'empty_ttl' => (int) env('GHOST_CACHE_EMPTY_TTL', 300),
 ],
 ```
 
-`miss_ttl` remembers "this URL has no content" so an unknown URL cannot reach Ghost on every
-request; `0` disables it. `empty_ttl` keeps successful-but-empty responses short-lived, so a
-mistyped domain tag cannot freeze an empty sitemap for the full TTL.
+`miss_ttl` (300s) remembers "this URL has no content" so an unknown URL cannot reach Ghost on every
+request; `0` disables it. `empty_ttl` (300s) keeps successful-but-empty responses short-lived, so a
+mistyped domain tag cannot freeze an empty sitemap for the full TTL. Neither is in the published
+file — add the key to change one.
 
 Own the declaration yourself once more than one thing depends on it:
 

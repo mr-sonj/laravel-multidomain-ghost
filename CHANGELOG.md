@@ -13,11 +13,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `GhostRouteRegistrar::registerAll()` no longer registers the catch-all route. If calling manually, you must also call `GhostRouteRegistrar::registerCatchAlls()` during the `booted` phase.
 - `ads.txt` is now read from `resources/domains/{domain_key}/ads.txt` only. The `multidomain-ghost.ads.txt` config value (`GHOST_ADS_TXT`) and the legacy `services.adsense.ads_txt` fallback are gone, and `/ads.txt` is registered only for domains that own the file. Move each domain's content into its own file, or the route returns 404.
 - `multidomain-ghost.robots.content_signal` now reads `GHOST_ROBOTS_CONTENT_SIGNAL` instead of `ROBOTS_CONTENT_SIGNAL`. Rename the variable in `.env` or the `Content-Signal:` line disappears.
+- `config/multidomain-ghost.php` was trimmed from 39 settings to 16 — only the ones worth deciding per deployment. Every key it drops keeps its default inside the package, so behaviour is unchanged, but **these environment variables no longer do anything**: `GHOST_JWT_AUDIENCE`, `GHOST_VERIFY_SSL`, `GHOST_RETRY_TIMES`, `GHOST_RETRY_SLEEP`, `GHOST_CACHE_PREFIX`, `GHOST_CACHE_MISS_TTL`, `GHOST_CACHE_EMPTY_TTL`, `GHOST_DOMAIN_TAG_PREFIX`, `GHOST_ALLOW_UNSIGNED_WEBHOOKS`, `GHOST_WEBHOOK_TOLERANCE`, `GHOST_ROUTES_REDIRECT_WWW`, `GHOST_WEBHOOK_ROUTE_ENABLED`, `GHOST_WEBHOOK_ROUTE`, `GHOST_SEO_DEFAULT_IMAGE`, `GHOST_ROBOTS_SITEMAP`. If you set one, add the corresponding key back to `config/multidomain-ghost.php` — the README lists every key with its default. An existing published config keeps working untouched.
+
+### Fixed
+
+- The Admin API token's `aud` claim fell back to `/ghost/api/admin/` in code while the published config said `/admin/`. Ghost v5+ expects `/admin/`, so any application that had removed the key from its config was signing tokens Ghost rejects. The code default is now `/admin/`.
+- The webhook route's middleware fell back to `[]` in code while the published config said `['throttle:500,1']`, so an application without the config block ran an unauthenticated, unthrottled endpoint. The rate limit is now the code default.
 
 ### Added
 
 - `resources/domains/{domain_key}/` for a domain's own static files, alongside `config/domains/` and `routes/domains/`. A `robots.txt` there replaces the generated policy in full, `Sitemap:` line included; an `ads.txt` there is served verbatim. `php artisan domain:add` creates the directory.
 - `MrSonj\MultiDomainGhost\Support\DomainAssets` for reading those files.
+
+### Changed
+
+- `multidomain-ghost.routes.paths` is now merged over the package defaults instead of replacing them. Relocating or disabling one of the three standard files no longer requires restating the other two.
 
 ### Removed
 

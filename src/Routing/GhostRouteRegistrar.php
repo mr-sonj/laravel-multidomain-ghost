@@ -65,10 +65,12 @@ class GhostRouteRegistrar
         Route::domain($domain)
             ->middleware($middleware)
             ->group(function () use ($domain, $routeNamePrefix, $routes) {
+                // Merged over the defaults rather than replacing them, so relocating
+                // or disabling one file does not require restating the other two.
                 $paths = config('multidomain-ghost.routes.paths');
-                if (! is_array($paths)) {
-                    $paths = self::DEFAULT_PATHS;
-                }
+                $paths = is_array($paths)
+                    ? array_merge(self::DEFAULT_PATHS, $paths)
+                    : self::DEFAULT_PATHS;
 
                 if (isset($paths['robots']) && is_string($paths['robots'])) {
                     Route::name("{$routeNamePrefix}_robots")

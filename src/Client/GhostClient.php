@@ -208,7 +208,7 @@ class GhostClient
         return JWT::encode([
             'iat' => $now,
             'exp' => $now + 300,
-            'aud' => $this->configValue('jwt_audience', '/ghost/api/admin/'),
+            'aud' => $this->configValue('jwt_audience', '/admin/'),
         ], $decodedSecret, 'HS256', null, [
             'alg' => 'HS256',
             'kid' => $id,
