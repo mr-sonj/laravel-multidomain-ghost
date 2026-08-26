@@ -135,7 +135,18 @@ PHP;
         }
         $this->scaffoldViews($sanitized, $domain);
 
-        // 5. Create CSS file
+        // 5. Create the per-domain assets folder for robots.txt and ads.txt.
+        // No stub files: a stub robots.txt would switch this domain off generated
+        // output - Sitemap: line included - without anyone noticing, and an empty
+        // ads.txt claims the domain authorises no sellers.
+        $assetsDir = resource_path("domains/{$sanitized}");
+        if (! is_dir($assetsDir)) {
+            mkdir($assetsDir, 0755, true);
+            $this->line("<info>✓ Assets folder created:</info> resources/domains/{$sanitized}");
+        }
+        $this->line('  <comment>Put ads.txt there to publish it; a robots.txt there replaces the generated one, Sitemap: line included.</comment>');
+
+        // 6. Create CSS file
         $cssFile = resource_path("css/{$sanitized}.css");
         if (! file_exists($cssFile) || $this->option('force')) {
             @mkdir(dirname($cssFile), 0755, true);
@@ -174,10 +185,10 @@ PHP;
             $this->line("<info>✓ CSS file ready:</info> resources/css/{$sanitized}.css");
         }
 
-        // 6. Auto-inject CSS entry into vite.config.js
+        // 7. Auto-inject CSS entry into vite.config.js
         $this->injectViteConfig($sanitized);
 
-        // 7. Auto-update local Herd config if present
+        // 8. Auto-update local Herd config if present
         $this->updateHerdConfig($domain);
 
         if (file_exists(base_path(".env.{$domain}"))) {

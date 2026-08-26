@@ -87,6 +87,21 @@ class DomainCommandsTest extends TestCase
         $this->assertSame(['example.com'], DomainRegistry::all());
     }
 
+    public function test_domain_add_creates_the_per_domain_assets_directory(): void
+    {
+        $this->artisan('domain:add', ['domain' => 'example.com'])->assertSuccessful();
+
+        $assetsDirectory = $this->basePath.'/resources/domains/example_com';
+
+        $this->assertDirectoryExists($assetsDirectory);
+
+        // Deliberately no stubs: a stub robots.txt would silently switch the domain
+        // off generated output and lose its Sitemap: line, and an empty ads.txt is a
+        // false claim about seller authorisation.
+        $this->assertFileDoesNotExist("{$assetsDirectory}/robots.txt");
+        $this->assertFileDoesNotExist("{$assetsDirectory}/ads.txt");
+    }
+
     public function test_domain_add_scaffolds_a_runnable_domain_route_file(): void
     {
         $this->artisan('domain:add', ['domain' => 'example.com'])
