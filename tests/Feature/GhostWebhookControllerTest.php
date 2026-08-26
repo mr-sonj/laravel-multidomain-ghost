@@ -60,4 +60,26 @@ class GhostWebhookControllerTest extends TestCase
         ])->assertJsonPath('message', 'Ignored. Domain not registered in this application.')
             ->assertJsonPath('cache_cleared', []);
     }
+
+    public function test_webhook_identifies_page_content_type_via_hash_page_tag(): void
+    {
+        $this->app['config']->set('multidomain-ghost.allow_unsigned_webhooks', true);
+        $response = $this->postJson('/webhook/ghost/post', [
+            'name' => 'post.published',
+            'post' => [
+                'current' => [
+                    'canonical_url' => 'https://example.com/about',
+                    'tags' => [
+                        ['name' => '#page', 'slug' => 'hash-page'],
+                        ['name' => '#example.com', 'slug' => 'hash-example-com'],
+                    ],
+                ],
+            ],
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('content_type', 'page');
+        // When content is a page (#page), dataBlog_pagination cache is not cleared
+        $this->assertNotContains('example.com:dataBlog_pagination', $response->json('cache_cleared'));
+    }
 }

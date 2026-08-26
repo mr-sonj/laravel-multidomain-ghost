@@ -31,8 +31,7 @@ class GhostWebhookController extends Controller
 
         $data = $request->all();
         $nameWebhook = $request->input('name');
-        $contentType = isset($data['page']) ? 'page' : 'post';
-        $payload = $data[$contentType] ?? [];
+        $payload = $data['post'] ?? [];
         $posts = collect([
             $payload['current'] ?? null,
             $payload['previous'] ?? null,
@@ -74,7 +73,7 @@ class GhostWebhookController extends Controller
             $cacheCleared[] = "{$domainToClear}:slugs";
         }
 
-        $isPage = $contentType === 'page' || $posts->contains(function (array $post) {
+        $isPage = $posts->contains(function (array $post) {
             return isset($post['tags']) && collect($post['tags'])->pluck('name')->contains('#page');
         });
 

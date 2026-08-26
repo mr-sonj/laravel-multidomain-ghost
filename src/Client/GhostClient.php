@@ -43,11 +43,7 @@ class GhostClient
         $filter = 'visibility:public+canonical_url:-null';
         $fields = 'canonical_url,slug,codeinjection_head,updated_at,published_at';
         $posts = $this->listResource('posts', $filter, $fields, 1, 'all', false, null);
-        $pages = $this->listResource('pages', $filter, $fields, 1, 'all', false, null);
-        $links = [
-            ...($posts['posts'] ?? []),
-            ...($pages['pages'] ?? []),
-        ];
+        $links = $posts['posts'] ?? [];
         $uniqueLinks = [];
 
         foreach ($links as $link) {
@@ -58,16 +54,6 @@ class GhostClient
         }
 
         return array_values($uniqueLinks);
-    }
-
-    public function pages(): ?array
-    {
-        $result = $this->listResource('pages', null, 'canonical_url');
-        if ($result === null) {
-            return null;
-        }
-
-        return array_column($result['pages'] ?? [], 'canonical_url');
     }
 
     public function list(?string $filter = null, ?string $fields = null, int $page = 1, int|string $limit = 'all', bool $modContent = true, ?string $include = 'tags'): ?array
@@ -119,14 +105,13 @@ class GhostClient
         if (! $this->usesAdminApi) {
             $query['key'] = $this->configValue('content_key');
         }
-        foreach (['posts', 'pages'] as $resource) {
-            $response = $this->fetch(
-                $this->resourceEndpointFor($resource),
-                array_filter($query, fn ($value) => $value !== null),
-            );
-            if ($response !== null && ! empty($response->json($resource))) {
-                return $this->modContent($response->json($resource.'.0'));
-            }
+
+        $response = $this->fetch(
+            $this->resourceEndpointFor('posts'),
+            array_filter($query, fn ($value) => $value !== null),
+        );
+        if ($response !== null && ! empty($response->json('posts'))) {
+            return $this->modContent($response->json('posts.0'));
         }
 
         return null;

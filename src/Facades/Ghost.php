@@ -9,7 +9,6 @@ use MrSonj\MultiDomainGhost\Client\GhostClient;
 
 /**
  * @method static array slugs()
- * @method static ?array pages()
  * @method static ?array list(?string $filter = null, ?string $fields = null, int $page = 1, int|string $limit = 'all', bool $modContent = true, ?string $include = 'tags')
  * @method static ?array content(string $canonicalUrl)
  * @method static array modContent(array $content)

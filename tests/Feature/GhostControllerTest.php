@@ -43,6 +43,38 @@ class GhostControllerTest extends TestCase
         $this->assertEquals('My Application', $seo['title']);
     }
 
+    public function test_seo_data_identifies_page_via_hash_page_tag(): void
+    {
+        /** @var GhostController $controller */
+        $controller = $this->app->make(GhostController::class);
+
+        $seo = $controller->seoData([
+            'domain' => 'example.com',
+            'title' => 'About Us',
+            'tags' => [['name' => '#page', 'slug' => 'hash-page']],
+        ]);
+
+        $this->assertTrue($seo['is_page']);
+        $this->assertSame('WebPage', $seo['type']);
+        $this->assertSame('website', $seo['og']['type']);
+    }
+
+    public function test_seo_data_defaults_to_article_without_hash_page_tag(): void
+    {
+        /** @var GhostController $controller */
+        $controller = $this->app->make(GhostController::class);
+
+        $seo = $controller->seoData([
+            'domain' => 'example.com',
+            'title' => 'My First Post',
+            'tags' => [['name' => '#news', 'slug' => 'hash-news']],
+        ]);
+
+        $this->assertFalse($seo['is_page']);
+        $this->assertSame('Article', $seo['type']);
+        $this->assertSame('article', $seo['og']['type']);
+    }
+
     public function test_page_uses_the_package_fallback_without_published_config_or_views(): void
     {
         $content = $this->createMock(GhostContentService::class);
@@ -158,17 +190,17 @@ class GhostControllerTest extends TestCase
         ])->assertForbidden();
     }
 
-    public function test_page_webhook_ignores_every_domain_when_registry_is_empty(): void
+    public function test_post_webhook_ignores_every_domain_when_registry_is_empty(): void
     {
         Event::fake();
         $this->setRegisteredDomains([]);
 
         $response = $this->signedWebhook([
-            'name' => 'page.published',
-            'page' => [
+            'name' => 'post.published',
+            'post' => [
                 'current' => [
                     'canonical_url' => 'https://another-example.com/about',
-                    'tags' => [],
+                    'tags' => [['name' => '#page', 'slug' => 'hash-page']],
                 ],
             ],
         ]);

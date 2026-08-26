@@ -40,7 +40,7 @@ class GhostNegativeCacheTest extends TestCase
 
     public function test_a_missing_url_only_reaches_ghost_once(): void
     {
-        Http::fake(['*' => Http::response(['posts' => [], 'pages' => []])]);
+        Http::fake(['*' => Http::response(['posts' => []])]);
 
         $service = $this->service();
         $service->getPost('https://example.com/does-not-exist');
@@ -57,7 +57,7 @@ class GhostNegativeCacheTest extends TestCase
 
     public function test_a_cached_miss_is_still_reported_as_missing(): void
     {
-        Http::fake(['*' => Http::response(['posts' => [], 'pages' => []])]);
+        Http::fake(['*' => Http::response(['posts' => []])]);
 
         $service = $this->service();
         $service->getPost('https://example.com/does-not-exist');
@@ -74,7 +74,7 @@ class GhostNegativeCacheTest extends TestCase
                     'canonical_url' => 'https://example.com/new-post',
                     'title' => 'Just published',
                 ]]])
-                : Http::response(['posts' => [], 'pages' => []]);
+                : Http::response(['posts' => []]);
         });
 
         $service = $this->service();
@@ -92,7 +92,7 @@ class GhostNegativeCacheTest extends TestCase
     public function test_local_environment_never_serves_a_cached_miss(): void
     {
         $this->app['env'] = 'local';
-        Http::fake(['*' => Http::response(['posts' => [], 'pages' => []])]);
+        Http::fake(['*' => Http::response(['posts' => []])]);
 
         $service = $this->service();
         $service->getPost('https://example.com/draft');

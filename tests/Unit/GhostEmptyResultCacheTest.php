@@ -42,7 +42,7 @@ class GhostEmptyResultCacheTest extends TestCase
 
     public function test_an_empty_slug_list_is_cached_only_briefly(): void
     {
-        Http::fake(['*' => Http::response(['posts' => [], 'pages' => []])]);
+        Http::fake(['*' => Http::response(['posts' => []])]);
 
         $service = $this->service();
         $service->slugs();
@@ -66,7 +66,7 @@ class GhostEmptyResultCacheTest extends TestCase
         Http::fake(['*' => Http::response(['posts' => [[
             'canonical_url' => 'https://example.com/a',
             'slug' => 'a',
-        ]], 'pages' => []])]);
+        ]]])]);
 
         $service = $this->service();
         $service->slugs();

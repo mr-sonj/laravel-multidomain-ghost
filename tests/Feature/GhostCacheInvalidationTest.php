@@ -82,7 +82,7 @@ class GhostCacheInvalidationTest extends TestCase
 
     public function test_webhook_purges_the_slug_cache_of_a_domain_it_is_not_serving(): void
     {
-        Http::fake(['*' => Http::response(['posts' => [], 'pages' => []])]);
+        Http::fake(['*' => Http::response(['posts' => []])]);
 
         $this->enterRequestForDomain(self::SERVING_PREFIX);
         $this->serviceFor('b.com')->slugs();

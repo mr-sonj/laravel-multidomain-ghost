@@ -55,7 +55,7 @@ class GhostClientTest extends TestCase
         ));
     }
 
-    public function test_sitemap_links_include_posts_and_pages(): void
+    public function test_sitemap_links_include_posts(): void
     {
         $this->app['config']->set('multidomain-ghost.url', 'https://cms.example.com');
         $this->app['config']->set('multidomain-ghost.content_key', 'content-key');
@@ -66,12 +66,6 @@ class GhostClientTest extends TestCase
                     ['canonical_url' => 'https://example.com/shared'],
                 ],
             ]),
-            '*/pages*' => Http::response([
-                'pages' => [
-                    ['canonical_url' => 'https://example.com/about'],
-                    ['canonical_url' => 'https://example.com/shared'],
-                ],
-            ]),
         ]);
 
         $links = (new GhostClient('example.com', false))->slugs();
@@ -79,19 +73,17 @@ class GhostClientTest extends TestCase
         $this->assertSame([
             'https://example.com/blog/post',
             'https://example.com/shared',
-            'https://example.com/about',
         ], array_column($links, 'canonical_url'));
-        Http::assertSentCount(2);
+        Http::assertSentCount(1);
     }
 
-    public function test_content_falls_back_to_the_pages_endpoint(): void
+    public function test_content_fetches_from_the_posts_endpoint(): void
     {
         $this->app['config']->set('multidomain-ghost.url', 'https://cms.example.com');
         $this->app['config']->set('multidomain-ghost.content_key', 'content-key');
         Http::fake([
-            '*/posts*' => Http::response(['posts' => []]),
-            '*/pages*' => Http::response([
-                'pages' => [[
+            '*/posts*' => Http::response([
+                'posts' => [[
                     'title' => 'About',
                     'canonical_url' => 'https://example.com/about',
                 ]],
@@ -102,7 +94,7 @@ class GhostClientTest extends TestCase
 
         $this->assertSame('About', $content['title']);
         $this->assertSame('example.com', $content['domain']);
-        Http::assertSentCount(2);
+        Http::assertSentCount(1);
     }
 
     public function test_core_normalization_does_not_apply_frontend_or_brand_specific_mutations(): void
