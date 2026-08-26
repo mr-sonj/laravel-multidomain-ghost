@@ -1,0 +1,41 @@
+changelog:
+  categories:
+    - title: '🚀 Features & Enhancements'
+      labels:
+        - 'feature'
+        - 'enhancement'
+      prefixes:
+        - 'feat:'
+        - 'feat('
+        - 'feature:'
+    - title: '🐛 Bug Fixes'
+      labels:
+        - 'fix'
+        - 'bug'
+      prefixes:
+        - 'fix:'
+        - 'fix('
+        - 'bug:'
+    - title: '📝 Documentation'
+      labels:
+        - 'documentation'
+        - 'docs'
+      prefixes:
+        - 'docs:'
+        - 'docs('
+    - title: '🧰 Maintenance & Refactoring'
+      labels:
+        - 'refactor'
+        - 'chore'
+        - 'ci'
+        - 'style'
+      prefixes:
+        - 'refactor:'
+        - 'refactor('
+        - 'chore:'
+        - 'chore('
+        - 'ci:'
+        - 'ci('
+        - 'perf:'
+        - 'test:'
+        - 'style:'
