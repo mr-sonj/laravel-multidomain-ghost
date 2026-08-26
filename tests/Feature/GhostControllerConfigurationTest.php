@@ -91,6 +91,46 @@ class GhostControllerConfigurationTest extends TestCase
         $this->controller('other.com')->ads();
     }
 
+    public function test_a_domain_robots_file_replaces_the_generated_body(): void
+    {
+        $this->setDomainAssets([
+            'example_com/robots.txt' => "User-agent: GPTBot\nDisallow: /\n\nUser-agent: *\nAllow: /\n",
+        ]);
+
+        $robots = $this->controller()->robots()->getContent();
+
+        $this->assertSame("User-agent: GPTBot\nDisallow: /\n\nUser-agent: *\nAllow: /", $robots);
+        $this->assertStringNotContainsString('Sitemap:', $robots);
+        $this->assertStringNotContainsString('/cdn-cgi/', $robots);
+    }
+
+    public function test_robots_falls_back_to_the_generated_body_without_a_file(): void
+    {
+        $robots = $this->controller()->robots()->getContent();
+
+        $this->assertStringContainsString('User-agent: *', $robots);
+        $this->assertStringContainsString('Disallow: /cdn-cgi/', $robots);
+        $this->assertStringContainsString('Sitemap: https://example.com/sitemap.xml', $robots);
+    }
+
+    public function test_robots_files_are_isolated_per_domain(): void
+    {
+        $this->setDomainAssets(['example_com/robots.txt' => "User-agent: GPTBot\nDisallow: /"]);
+
+        $this->assertStringNotContainsString('Sitemap:', $this->controller('example.com')->robots()->getContent());
+        $this->assertStringContainsString('Sitemap:', $this->controller('other.com')->robots()->getContent());
+    }
+
+    public function test_a_domain_robots_file_keeps_the_plain_text_content_type(): void
+    {
+        $this->setDomainAssets(['example_com/robots.txt' => 'User-agent: *']);
+
+        $this->assertSame(
+            'text/plain;charset=UTF-8',
+            $this->controller()->robots()->headers->get('Content-Type'),
+        );
+    }
+
     public function test_seo_data_falls_back_to_the_active_domain_when_content_has_none(): void
     {
         $seo = $this->controller()->seoData(['title' => 'Hand built']);

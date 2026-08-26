@@ -154,8 +154,22 @@ class GhostController extends Controller
         ]);
     }
 
+    /**
+     * The domain's robots policy.
+     *
+     * A resources/domains/{domain_key}/robots.txt replaces this method's output
+     * wholesale rather than being appended to it: appending would keep imposing
+     * the package's own lines on every domain, which is the coupling the file is
+     * there to break. The file's author owns the Sitemap: line too.
+     */
     public function robots(): Response
     {
+        $file = DomainAssets::contents($this->domain, 'robots.txt');
+
+        if ($file !== null) {
+            return response($file)->header('Content-Type', 'text/plain;charset=UTF-8');
+        }
+
         $lines = ['User-agent: *'];
 
         foreach ((array) config('multidomain-ghost.robots.disallow', ['/cdn-cgi/']) as $path) {
