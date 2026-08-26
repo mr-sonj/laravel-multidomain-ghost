@@ -53,8 +53,10 @@ input entry.
 `routes/domains/example_com.php` is where `/`, `/blog`, `/blog/{slug}` and `/feed` live, and each
 domain shapes them however it likes — that file is loaded automatically from the domain registry,
 already inside the domain's route group, so `routes/web.php` is never touched. The standard files
-(`/robots.txt`, `/sitemap.xml`, `/ads.txt`) are registered for every domain without you declaring
-them. See [Route customization](#route-customization--explicit-declaration).
+(`/robots.txt`, `/sitemap.xml`) are registered for every domain without you declaring them, and
+`/ads.txt` is registered for every domain that owns one. See
+[Route customization](#route-customization--explicit-declaration) and
+[Per-domain robots.txt and ads.txt](#per-domain-robotstxt-and-adstxt).
 
 Unsupported Vite structures produce a warning with manual instructions, and
 `_setup/multi_domain_local_herd.conf` is updated when that optional file exists. Pass `--force` only
@@ -81,10 +83,10 @@ and open the domain — the generated home route and view render it.
 | `/` | `page` | Domain home Blade view. |
 | `/blog` | `blog` | Paginated Ghost post listing. |
 | `/blog/{slug}` | `page` | Domain post Blade view. |
-| `/robots.txt` | `robots` | Plain-text robots policy. |
+| `/robots.txt` | `robots` | `resources/domains/{domain_key}/robots.txt` verbatim, or a generated policy. |
 | `/sitemap.xml` | `sitemap` | XML sitemap. |
 | `/feed` | `feed` | RSS 2.0 feed. |
-| `/ads.txt` | `ads` | Plain-text ads configuration. |
+| `/ads.txt` | `ads` | `resources/domains/{domain_key}/ads.txt` verbatim. Registered only for domains that have one. |
 
 A second group 301-redirects `www.example.com` to the apex domain; without it the `www` host
 matches no route and 404s.
@@ -187,6 +189,54 @@ return [
 
 Route paths are the one thing this cannot override — see
 [Route customization](#route-customization--explicit-declaration).
+
+### Per-domain robots.txt and ads.txt
+
+`resources/domains/{domain_key}/` is the third per-domain convention, alongside `config/domains/`
+and `routes/domains/`. `php artisan domain:add` creates the directory; you add the files you want:
+
+```
+resources/domains/example_com/
+├── ads.txt
+└── robots.txt
+```
+
+**`ads.txt`** is served verbatim, and comes from this file only — there is no shared configuration
+value, because an ads.txt belongs to one publisher account. `/ads.txt` is registered only for
+domains that own the file. A missing or empty file leaves the route unregistered rather than
+serving an empty body: an empty ads.txt returned with a 200 claims the domain authorises no
+sellers, which is not the claim a domain without an ads.txt is making.
+
+**`robots.txt`**, when present, **replaces** the generated policy entirely — the `Sitemap:` line
+included, which you then write yourself:
+
+```
+User-agent: GPTBot
+Disallow: /
+
+User-agent: *
+Allow: /
+Disallow: /admin/
+
+Sitemap: https://example.com/sitemap.xml
+```
+
+Without that file, robots.txt is generated from configuration, and those keys are per-domain
+overridable like any other — as is the SEO fallback image:
+
+```php
+// config/domains/example_com.php
+return [
+    'multidomain-ghost.robots.disallow' => ['/cdn-cgi/', '/internal/'],
+    'multidomain-ghost.robots.content_signal' => 'search=yes,ai-train=no',
+    'multidomain-ghost.robots.sitemap' => 'https://example.com/sitemap.xml',
+    'multidomain-ghost.seo.default_image' => 'https://cdn.example.net/example_com/social.png',
+];
+```
+
+The rest of a domain's SEO needs no configuration: `app.name` and `app.url` come from the file
+above, and `og:site_name`, `twitter:site` and the locale are read from the JSON in the description
+of the domain's Ghost primary tag, so editors change them without a deploy.
 
 > [!WARNING]
 > **Ghost canonical URLs must match your routes.** Ghost's default permalink structure is `/{slug}/` at the root. If you use a prefix like `/blog/{slug}` or `/news/{slug}` in your Laravel routes, you must update the routing/canonical URLs in Ghost to match. The package finds posts by matching the current URL against the `canonical_url` returned by Ghost.

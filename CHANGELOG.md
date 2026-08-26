@@ -11,11 +11,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Content routes (`/`, `/blog`, `/blog/{slug}`, `/feed`) are no longer auto-registered for every domain. They must now be declared in `routes/domains/{domain_key}.php`. Run `php artisan domain:add {domain}` to generate the missing file for each domain.
 - `routes.paths.ads = null` in configuration now completely disables the `ads.txt` route instead of falling back to `/ads.txt`. If you had it set to `null` to keep the route, change it to `'/ads.txt'`.
 - `GhostRouteRegistrar::registerAll()` no longer registers the catch-all route. If calling manually, you must also call `GhostRouteRegistrar::registerCatchAlls()` during the `booted` phase.
+- `ads.txt` is now read from `resources/domains/{domain_key}/ads.txt` only. The `multidomain-ghost.ads.txt` config value (`GHOST_ADS_TXT`) and the legacy `services.adsense.ads_txt` fallback are gone, and `/ads.txt` is registered only for domains that own the file. Move each domain's content into its own file, or the route returns 404.
+- `multidomain-ghost.robots.content_signal` now reads `GHOST_ROBOTS_CONTENT_SIGNAL` instead of `ROBOTS_CONTENT_SIGNAL`. Rename the variable in `.env` or the `Content-Signal:` line disappears.
+
+### Added
+
+- `resources/domains/{domain_key}/` for a domain's own static files, alongside `config/domains/` and `routes/domains/`. A `robots.txt` there replaces the generated policy in full, `Sitemap:` line included; an `ads.txt` there is served verbatim. `php artisan domain:add` creates the directory.
+- `MrSonj\MultiDomainGhost\Support\DomainAssets` for reading those files.
 
 ### Removed
 
 - Removed `home`, `blog`, `post`, and `feed` keys from `multidomain-ghost.routes.paths` global config map.
 - Removed private method `GhostRouteRegistrar::moveCatchAllLast()`.
+- Removed the `ads` block from `config/multidomain-ghost.php`.
+- Removed the private method `GhostRouteRegistrar::adsTxtContent()`.
 
 ## 1.2.0 - 2026-08-26
 
