@@ -196,23 +196,58 @@ class GhostController extends Controller
     }
 
     /**
-     * The domain's own ads.txt, served verbatim.
+     * The domain's own ads.txt.
      *
-     * Verbatim because ads.txt is an IAB format: any rewriting of it is a risk.
      * 404 rather than an empty 200 because an empty ads.txt is itself a claim -
      * that the domain authorises no sellers - which a domain without the file is
-     * not making. The registrar leaves the route unregistered in that case; this
-     * guard covers a route the application declared for itself.
+     * not making. The registrar leaves the route unregistered in that case; the
+     * guard in domainFile() covers a route the application declared for itself.
      */
     public function ads(): Response
     {
-        $ads = DomainAssets::contents($this->domain, 'ads.txt');
+        return $this->domainFile('ads.txt');
+    }
 
-        if ($ads === null) {
+    /**
+     * The domain's own llms.txt: the index an AI crawler reads in place of
+     * discovering the site page by page.
+     *
+     * File-backed only, on the same reasoning as ads.txt. The package could
+     * assemble one from Ghost's posts, but llms.txt is an editorial statement of
+     * what a site wants read and in what order, not an inventory - a generated
+     * one would put words in the publisher's mouth.
+     */
+    public function llms(): Response
+    {
+        return $this->domainFile('llms.txt');
+    }
+
+    /**
+     * The domain's own llms-full.txt: the expanded companion to llms.txt,
+     * carrying the content itself rather than links to it.
+     */
+    public function llmsFull(): Response
+    {
+        return $this->domainFile('llms-full.txt');
+    }
+
+    /**
+     * One of the text files under resources/domains/{domain_key}/, served verbatim.
+     *
+     * Verbatim because each of these is somebody else's format - ads.txt is IAB's,
+     * llms.txt is a markdown convention - and rewriting a format you do not own is
+     * a risk. text/plain for all of them: llms.txt is markdown by content, but it
+     * is fetched as a file, not rendered, and the neighbouring files are plain.
+     */
+    private function domainFile(string $file): Response
+    {
+        $contents = DomainAssets::contents($this->domain, $file);
+
+        if ($contents === null) {
             abort(404);
         }
 
-        return response($ads)->header('Content-Type', 'text/plain;charset=UTF-8');
+        return response($contents)->header('Content-Type', 'text/plain;charset=UTF-8');
     }
 
     /**

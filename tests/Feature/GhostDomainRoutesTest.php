@@ -440,6 +440,97 @@ PHP
         $this->assertFalse(Route::has('example_com_ads'));
     }
 
+    public function test_llms_txt_route_is_not_registered_when_the_domain_has_no_llms_file(): void
+    {
+        $this->setRegisteredDomains(['example_com' => []]);
+        GhostRouteRegistrar::registerAll();
+
+        $this->assertFalse(Route::has('example_com_llms'));
+        $this->get('https://example.com/llms.txt')->assertNotFound();
+    }
+
+    public function test_llms_txt_route_is_registered_when_the_domain_has_an_llms_file(): void
+    {
+        config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
+        $this->setDomainAssets(['example_com/llms.txt' => "# Example\n\n- [Blog](https://example.com/blog)"]);
+
+        $this->setRegisteredDomains(['example_com' => []]);
+        GhostRouteRegistrar::registerAll();
+
+        $response = $this->get('https://example.com/llms.txt');
+
+        $response->assertOk();
+        $response->assertSee('- [Blog](https://example.com/blog)', false);
+        $this->assertSame('text/plain;charset=UTF-8', $response->headers->get('Content-Type'));
+    }
+
+    public function test_llms_full_txt_route_is_registered_when_the_domain_has_the_file(): void
+    {
+        config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
+        $this->setDomainAssets(['example_com/llms-full.txt' => '# Example, in full']);
+
+        $this->setRegisteredDomains(['example_com' => []]);
+        GhostRouteRegistrar::registerAll();
+
+        $this->assertSame('llms-full.txt', Route::getRoutes()->getByName('example_com_llms_full')->uri());
+        $this->get('https://example.com/llms-full.txt')->assertOk()->assertSee('# Example, in full', false);
+    }
+
+    public function test_the_two_llms_files_are_registered_independently_of_each_other(): void
+    {
+        $this->setDomainAssets(['example_com/llms.txt' => '# Example']);
+
+        $this->setRegisteredDomains(['example_com' => []]);
+        GhostRouteRegistrar::registerAll();
+
+        $this->assertTrue(Route::has('example_com_llms'));
+        $this->assertFalse(Route::has('example_com_llms_full'));
+    }
+
+    public function test_llms_route_registration_is_independent_per_domain(): void
+    {
+        $this->setDomainAssets(['example_com/llms.txt' => '# Example']);
+
+        $this->setRegisteredDomains(['example_com' => [], 'other_com' => []]);
+        GhostRouteRegistrar::registerAll();
+
+        $this->assertTrue(Route::has('example_com_llms'));
+        $this->assertFalse(Route::has('other_com_llms'));
+    }
+
+    public function test_an_empty_llms_file_leaves_the_route_unregistered(): void
+    {
+        $this->setDomainAssets(['example_com/llms.txt' => "   \n\n"]);
+
+        $this->setRegisteredDomains(['example_com' => []]);
+        GhostRouteRegistrar::registerAll();
+
+        $this->assertFalse(Route::has('example_com_llms'));
+    }
+
+    public function test_llms_txt_route_honours_an_explicit_path(): void
+    {
+        config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
+        config()->set('multidomain-ghost.routes.paths.llms', '/ai/llms.txt');
+        $this->setDomainAssets(['example_com/llms.txt' => '# Example']);
+
+        $this->setRegisteredDomains(['example_com' => []]);
+        GhostRouteRegistrar::registerAll();
+
+        $this->assertSame('ai/llms.txt', Route::getRoutes()->getByName('example_com_llms')->uri());
+        $this->get('https://example.com/ai/llms.txt')->assertOk()->assertSee('# Example', false);
+    }
+
+    public function test_llms_path_set_to_null_disables_the_route(): void
+    {
+        config()->set('multidomain-ghost.routes.paths.llms', null);
+        $this->setDomainAssets(['example_com/llms.txt' => '# Example']);
+
+        Route::ghostDomain('example.com');
+
+        $this->assertFalse(Route::has('example_com_llms'));
+    }
+
     private function matchedRouteName(string $url): ?string
     {
         return Route::getRoutes()

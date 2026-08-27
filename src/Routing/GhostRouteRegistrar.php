@@ -22,6 +22,25 @@ class GhostRouteRegistrar
         'sitemap' => '/sitemap.xml',
         'robots' => '/robots.txt',
         'ads' => '/ads.txt',
+        'llms' => '/llms.txt',
+        'llms_full' => '/llms-full.txt',
+    ];
+
+    /**
+     * The path keys whose route exists only when the domain owns the file behind
+     * it, mapped to that file and to the controller method serving it.
+     *
+     * robots is deliberately absent: its route is always registered, because the
+     * package generates a policy for a domain that brought no file of its own.
+     * These three have no generated form - an ads.txt or an llms.txt the package
+     * invented would be a claim nobody made - so no file means no route.
+     *
+     * @var array<string, array{0: string, 1: string}>
+     */
+    private const FILE_BACKED_PATHS = [
+        'ads' => ['ads.txt', 'ads'],
+        'llms' => ['llms.txt', 'llms'],
+        'llms_full' => ['llms-full.txt', 'llmsFull'],
     ];
 
     private static ?RouteCollectionInterface $routeCollection = null;
@@ -85,10 +104,17 @@ class GhostRouteRegistrar
                 // Decided from this domain's own file rather than from configuration:
                 // configuration only ever reflects the domain active in this process,
                 // so reading it here would hand one domain's answer to all the others.
-                if (isset($paths['ads']) && is_string($paths['ads'])
-                    && DomainAssets::contents($domain, 'ads.txt') !== null) {
-                    Route::name("{$routeNamePrefix}_ads")
-                        ->get($paths['ads'], [GhostController::class, 'ads']);
+                foreach (self::FILE_BACKED_PATHS as $key => [$file, $method]) {
+                    if (! isset($paths[$key]) || ! is_string($paths[$key])) {
+                        continue;
+                    }
+
+                    if (DomainAssets::contents($domain, $file) === null) {
+                        continue;
+                    }
+
+                    Route::name("{$routeNamePrefix}_{$key}")
+                        ->get($paths[$key], [GhostController::class, $method]);
                 }
 
                 if ($routes instanceof Closure) {

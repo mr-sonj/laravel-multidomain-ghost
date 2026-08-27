@@ -108,16 +108,24 @@ Everything below is optional.
 
 ## Route customization & explicit declaration
 
-By default, registered domains automatically load the content routes declared in their respective `routes/domains/{domain_key}.php` files, as well as the standard Ghost routes (`sitemap.xml`, `robots.txt`, `ads.txt`).
+By default, registered domains automatically load the content routes declared in their respective `routes/domains/{domain_key}.php` files, as well as the standard Ghost routes (`sitemap.xml`, `robots.txt`, `ads.txt`, `llms.txt`, `llms-full.txt`).
 
-A `routes.paths` map in `config/multidomain-ghost.php` decides where the three standard web files live. It is not in the published file — whatever you add is merged over the defaults (`/sitemap.xml`, `/robots.txt`, `/ads.txt`), so one entry can be relocated, or set to `null` to leave that route unregistered, without restating the other two:
+A `routes.paths` map in `config/multidomain-ghost.php` decides where those standard web files live. It is not in the published file — whatever you add is merged over the defaults, so one entry can be relocated, or set to `null` to leave that route unregistered, without restating the others:
+
+| Key | Default path | Registered |
+| --- | --- | --- |
+| `sitemap` | `/sitemap.xml` | always |
+| `robots` | `/robots.txt` | always — generated when the domain brings no file |
+| `ads` | `/ads.txt` | only when the domain owns the file |
+| `llms` | `/llms.txt` | only when the domain owns the file |
+| `llms_full` | `/llms-full.txt` | only when the domain owns the file |
 
 ```php
 'routes' => [
     'paths' => [
         'sitemap' => '/sitemap-index.xml',  // relocated
         'ads' => null,                      // not registered
-        // robots stays at /robots.txt
+        // robots, llms and llms_full stay at their defaults
     ],
 ],
 ```
@@ -190,22 +198,36 @@ return [
 Route paths are the one thing this cannot override — see
 [Route customization](#route-customization--explicit-declaration).
 
-### Per-domain robots.txt and ads.txt
+### Per-domain robots.txt, ads.txt and llms.txt
 
 `resources/domains/{domain_key}/` is the third per-domain convention, alongside `config/domains/`
-and `routes/domains/`. `php artisan domain:add` creates the directory; you add the files you want:
+and `routes/domains/`. `php artisan domain:add` creates the directory; you add the files you want,
+and each one you add gets its route:
 
 ```
 resources/domains/example_com/
 ├── ads.txt
+├── llms-full.txt
+├── llms.txt
 └── robots.txt
 ```
+
+These files are per-domain by construction. `public/` is served by one webserver root shared by
+every domain, so a file placed there answers for all of them — which is right for a shared asset
+and wrong for a robots policy or a publisher's seller list.
 
 **`ads.txt`** is served verbatim, and comes from this file only — there is no shared configuration
 value, because an ads.txt belongs to one publisher account. `/ads.txt` is registered only for
 domains that own the file. A missing or empty file leaves the route unregistered rather than
 serving an empty body: an empty ads.txt returned with a 200 claims the domain authorises no
 sellers, which is not the claim a domain without an ads.txt is making.
+
+**`llms.txt`** and **`llms-full.txt`** follow ads.txt exactly: served verbatim, registered only for
+the domains that own them, and each independent of the other — a domain can publish `llms.txt`
+without `llms-full.txt`. They have no generated form. The package could assemble one from Ghost's
+posts, but llms.txt is an editorial statement of what a site wants read and in what order, not an
+inventory of what it happens to contain, so a generated one would put words in the publisher's
+mouth. All three are sent as `text/plain`.
 
 **`robots.txt`**, when present, **replaces** the generated policy entirely — the `Sitemap:` line
 included, which you then write yourself:
