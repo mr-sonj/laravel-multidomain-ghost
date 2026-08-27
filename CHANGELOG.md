@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Unreleased
 
+### Added
+
+- `domain:list` reports every route whose `viewPath` default names a view that does not exist, naming the domain, the route and the Blade file to create. The routes list, the tests and the table itself were all green while the view was missing, so nothing caught it until a request arrived.
+
+### Fixed
+
+- A route whose `viewPath` default named a view that does not exist threw `View [...] not found` — a public 500, first triggered by the first request Ghost had content for. `page()` and `blog()` now render the configured view, then the package's own `multidomain-ghost::page` / `::blog`, and log a warning naming both the missing view and the one used. The package views carry the full document and every SEO tag, so the fallback is an unstyled page rather than a broken one.
+- Per-domain `config/domains/{domain_key}.php` files lost every `env()` value once the domain's config cache existed. `LoadDomainConfiguration` re-`require`d the raw file after `LoadConfiguration` had already loaded the cached one, and by then `LoadEnvironmentVariables` had returned early without reading `.env` — so each `env()` evaluated to `null` and overwrote the value the cache had baked in at build time. The bootstrapper now returns early when the configuration in use is the domain-suffixed cache, which already carries those overrides. A bare `config:cache` writes to the shared path and never went through this bootstrapper, so overrides are still applied in that case. `env()` is now usable in a per-domain config file, cached or not.
+
+### Changed
+
+- README documents swapping a package controller through the container, and points out that the auto-registered webhook route is served by `GhostWebhookController`, not by the deprecated `GhostController::postWebhook()`.
+
+## 1.2.5 - 2026-08-27
+
+> Tagged as a patch by mistake — the change below is breaking. Pin `~1.2.5` if you are not ready to move the files.
+
 ### Breaking
 
 - A domain's `robots.txt`, `ads.txt`, `llms.txt` and `llms-full.txt` moved from `resources/domains/{domain_key}/` to that domain's own view folder, `resources/views/{domain_key}/`. A domain has one folder under `resources/` again instead of two, beside its Blade files. Move the files across — `mv resources/domains/{key}/* resources/views/{key}/` for each domain, then delete `resources/domains/`. There is no fallback to the old location: a file left behind simply stops being served, and `/ads.txt`, `/llms.txt` and `/llms-full.txt` lose their routes. `domain:add` no longer creates `resources/domains/{key}/`.

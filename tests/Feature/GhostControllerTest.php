@@ -6,6 +6,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route as RoutingRoute;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use MrSonj\MultiDomainGhost\Contracts\DomainEnricherInterface;
 use MrSonj\MultiDomainGhost\Events\GhostPostUpdated;
@@ -73,6 +74,84 @@ class GhostControllerTest extends TestCase
         $this->assertFalse($seo['is_page']);
         $this->assertSame('Article', $seo['type']);
         $this->assertSame('article', $seo['og']['type']);
+    }
+
+    public function test_page_falls_back_when_the_route_declares_a_view_that_does_not_exist(): void
+    {
+        Log::spy();
+
+        $controller = new GhostController(new NullEnricher, $this->contentServiceReturningPost());
+        $request = $this->requestWithViewPath('https://example.com/about', '/about', 'example_com/post');
+
+        $view = $controller->page($request);
+
+        $this->assertSame('multidomain-ghost::page', $view->name());
+        $this->assertSame('Fallback page', $view->getData()['content']['title']);
+        Log::shouldHaveReceived('warning')->once()->withArgs(
+            fn (string $message): bool => str_contains($message, 'example_com/post')
+                && str_contains($message, 'multidomain-ghost::page'),
+        );
+    }
+
+    public function test_page_keeps_a_declared_view_that_does_exist(): void
+    {
+        Log::spy();
+
+        $controller = new GhostController(new NullEnricher, $this->contentServiceReturningPost());
+        $request = $this->requestWithViewPath('https://example.com/about', '/about', 'multidomain-ghost::blog');
+
+        $this->assertSame('multidomain-ghost::blog', $controller->page($request)->name());
+        Log::shouldNotHaveReceived('warning');
+    }
+
+    public function test_page_prefers_the_configured_view_over_the_packaged_one(): void
+    {
+        $this->app['config']->set('multidomain-ghost.views.page', 'multidomain-ghost::blog');
+
+        $controller = new GhostController(new NullEnricher, $this->contentServiceReturningPost());
+        $request = $this->requestWithViewPath('https://example.com/about', '/about', 'example_com/post');
+
+        $this->assertSame('multidomain-ghost::blog', $controller->page($request)->name());
+    }
+
+    public function test_blog_falls_back_when_the_route_declares_a_view_that_does_not_exist(): void
+    {
+        Log::spy();
+
+        $content = $this->createMock(GhostContentService::class);
+        $content->method('domain')->willReturn('example.com');
+        $content->method('dataBlog')->willReturn(['posts' => [], 'meta' => []]);
+        $content->method('getPost')->willReturn(null);
+
+        $controller = new GhostController(new NullEnricher, $content);
+        $request = $this->requestWithViewPath('https://example.com/blog', '/blog', 'example_com/blog');
+
+        $this->assertSame('multidomain-ghost::blog', $controller->blog($request)->name());
+        Log::shouldHaveReceived('warning')->once();
+    }
+
+    private function contentServiceReturningPost(): GhostContentService
+    {
+        $content = $this->createMock(GhostContentService::class);
+        $content->method('domain')->willReturn('example.com');
+        $content->method('getPost')->willReturn([
+            'domain' => 'example.com',
+            'title' => 'Fallback page',
+            'html' => '<p>Ghost content</p>',
+            'canonical_url' => 'https://example.com/about',
+        ]);
+
+        return $content;
+    }
+
+    private function requestWithViewPath(string $url, string $uri, string $viewPath): Request
+    {
+        $request = Request::create($url);
+        $route = (new RoutingRoute(['GET'], $uri, fn () => null))->defaults('viewPath', $viewPath);
+        $route->bind($request);
+        $request->setRouteResolver(static fn () => $route);
+
+        return $request;
     }
 
     public function test_page_uses_the_package_fallback_without_published_config_or_views(): void

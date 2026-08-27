@@ -3,6 +3,7 @@
 namespace MrSonj\MultiDomainGhost\Tests\Feature;
 
 use Illuminate\Filesystem\Filesystem;
+use Illuminate\Support\Facades\Route;
 use MrSonj\MultiDomainGhost\Support\DomainRegistry;
 use MrSonj\MultiDomainGhost\Tests\TestCase;
 
@@ -359,6 +360,30 @@ class DomainCommandsTest extends TestCase
 
         $this->artisan('domain:list')
             ->doesntExpectOutputToContain('cache.default')
+            ->assertExitCode(0);
+    }
+
+    public function test_domain_list_warns_about_a_route_pointing_at_a_view_that_does_not_exist(): void
+    {
+        $this->writeDomainConfigs(['example_com' => []]);
+        Route::domain('example.com')->get('/blog', fn () => null)
+            ->name('example_com_blog')
+            ->defaults('viewPath', 'example_com/blog');
+
+        $this->artisan('domain:list')
+            ->expectsOutputToContain('declares viewPath [example_com/blog]')
+            ->assertExitCode(0);
+    }
+
+    public function test_domain_list_stays_quiet_when_the_declared_view_exists(): void
+    {
+        $this->writeDomainConfigs(['example_com' => []]);
+        Route::domain('example.com')->get('/blog', fn () => null)
+            ->name('example_com_blog')
+            ->defaults('viewPath', 'multidomain-ghost::blog');
+
+        $this->artisan('domain:list')
+            ->doesntExpectOutputToContain('declares viewPath')
             ->assertExitCode(0);
     }
 

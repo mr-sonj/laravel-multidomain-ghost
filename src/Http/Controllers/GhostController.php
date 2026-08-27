@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Log;
 use MrSonj\MultiDomainGhost\Contracts\DomainEnricherInterface;
 use MrSonj\MultiDomainGhost\Http\Middleware\EnsureRegisteredDomain;
 use MrSonj\MultiDomainGhost\Services\GhostCacheManager;
@@ -114,8 +115,7 @@ class GhostController extends Controller
 
     public function page(Request $request): View
     {
-        $viewPath = $request->route('viewPath')
-            ?: config('multidomain-ghost.views.page', 'multidomain-ghost::page');
+        $viewPath = $this->viewPath($request, 'page');
         $content = $this->content($request);
         $seo = $this->seoData($content);
 
@@ -143,8 +143,7 @@ class GhostController extends Controller
             'tags' => [],
         ];
         $content = $this->enricher->enrich($content, $canonicalUrl);
-        $viewPath = $request->route('viewPath')
-            ?: config('multidomain-ghost.views.blog', 'multidomain-ghost::blog');
+        $viewPath = $this->viewPath($request, 'blog');
 
         return view($viewPath)->with([
             'content' => $content,
@@ -402,6 +401,46 @@ class GhostController extends Controller
             '{domain}' => $domain,
             '{domain_key}' => Domain::make($domain)->key(),
         ]);
+    }
+
+    /**
+     * The view to render, and a working one when the declared view is missing.
+     *
+     * A route's `viewPath` default names a file the application owns, so it can
+     * name one that was never created, or one deleted since. Rendering it anyway
+     * throws, and the request that finds out is a public one - the first time
+     * Ghost returns content for that route, which is the worst possible moment.
+     *
+     * The package's own view carries the full document and every SEO tag, so the
+     * fallback is an unstyled page rather than a broken one, and the warning is
+     * what makes the mistake findable. `domain:list` reports the same mistake
+     * before a deploy; this is the net under it.
+     */
+    private function viewPath(Request $request, string $key): string
+    {
+        $packaged = "multidomain-ghost::{$key}";
+        $configured = trim((string) config("multidomain-ghost.views.{$key}", $packaged)) ?: $packaged;
+        $requested = $request->route('viewPath');
+        $declared = is_string($requested) && trim($requested) !== ''
+            ? trim($requested)
+            : $configured;
+
+        $factory = view();
+
+        if ($factory->exists($declared)) {
+            return $declared;
+        }
+
+        $fallback = $declared !== $configured && $factory->exists($configured)
+            ? $configured
+            : $packaged;
+
+        Log::warning("multidomain-ghost: view [{$declared}] does not exist, rendering [{$fallback}] instead.", [
+            'domain' => $this->domain,
+            'route' => $request->route()?->getName(),
+        ]);
+
+        return $fallback;
     }
 
     /**

@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace MrSonj\MultiDomainGhost\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\View;
 use MrSonj\MultiDomainGhost\Support\Domain;
 use MrSonj\MultiDomainGhost\Support\DomainEnricherLocator;
+use MrSonj\MultiDomainGhost\Support\DomainName;
 use MrSonj\MultiDomainGhost\Support\DomainRegistry;
 
 class GhostDomainListCommand extends Command
@@ -57,6 +60,7 @@ class GhostDomainListCommand extends Command
 
         $this->warnAboutSharedCachePrefixes($prefixes);
         $this->warnAboutDivergingCacheStores($stores);
+        $this->warnAboutMissingViews($domains);
 
         return self::SUCCESS;
     }
@@ -93,6 +97,53 @@ class GhostDomainListCommand extends Command
         $overrides = require config_path("domains/{$sanitized}.php");
 
         return is_array($overrides) ? $overrides : [];
+    }
+
+    /**
+     * A route's `viewPath` default names a Blade file the application owns, and
+     * nothing else checks that the file is there: the routes list, the tests and
+     * this table are all green while it is missing. The request that finds out is
+     * a public one, the first time Ghost has content for that route.
+     *
+     * The controller degrades to the package's own view rather than throwing, so
+     * this is where the mistake is meant to surface - before a deploy, not after.
+     *
+     * @param  array<int, string>  $domains
+     */
+    private function warnAboutMissingViews(array $domains): void
+    {
+        $registered = array_flip($domains);
+        $missing = [];
+
+        foreach (Route::getRoutes() as $route) {
+            $viewPath = $route->defaults['viewPath'] ?? null;
+
+            if (! is_string($viewPath) || trim($viewPath) === '') {
+                continue;
+            }
+
+            $domain = DomainName::normalize((string) $route->getDomain());
+
+            if (! isset($registered[$domain]) || isset($missing[$domain][$viewPath])) {
+                continue;
+            }
+
+            if (View::exists($viewPath)) {
+                continue;
+            }
+
+            $missing[$domain][$viewPath] = $route->getName() ?: $route->uri();
+        }
+
+        foreach ($missing as $domain => $views) {
+            foreach ($views as $viewPath => $route) {
+                $hint = str_contains($viewPath, '::')
+                    ? 'Register the namespace, or point the route at a view that exists.'
+                    : 'Create resources/views/'.str_replace('.', '/', $viewPath).'.blade.php, or point the route at a view that exists.';
+
+                $this->warn("Domain [{$domain}] route [{$route}] declares viewPath [{$viewPath}], but no such view exists. Requests matching it fall back to the package's own view. ".$hint);
+            }
+        }
     }
 
     /**

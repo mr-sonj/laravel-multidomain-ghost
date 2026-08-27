@@ -92,4 +92,48 @@ class DomainFoundationTest extends TestCase
         $this->assertSame('Example', $app['config']->get('app.name'));
         $this->assertSame('example_cache', $app['config']->get('cache.prefix'));
     }
+
+    public function test_domain_configuration_is_skipped_when_the_domain_config_cache_is_in_use(): void
+    {
+        $files = new Filesystem;
+        $files->makeDirectory($this->basePath.'/storage/example_com', 0755, true);
+        $files->makeDirectory($this->basePath.'/config/domains', 0755, true);
+        $files->put(
+            $this->basePath.'/config/domains/example_com.php',
+            "<?php\n\nreturn ['services.demo.key' => env('MULTIDOMAIN_GHOST_ABSENT_SECRET')];\n",
+        );
+
+        $app = new Application($this->basePath);
+        $app->useDomain('example.com');
+
+        // What `domain:optimize` wrote: the override already baked in, resolved
+        // while .env was still being loaded.
+        $files->put($app->getCachedConfigPath(), "<?php\n\nreturn [];\n");
+        $app->instance('config', new Repository([
+            'services' => ['demo' => ['key' => 'baked-at-cache-time']],
+        ]));
+
+        (new LoadDomainConfiguration)->bootstrap($app);
+
+        $this->assertSame('baked-at-cache-time', $app['config']->get('services.demo.key'));
+    }
+
+    public function test_domain_configuration_is_applied_when_only_the_shared_config_cache_exists(): void
+    {
+        $files = new Filesystem;
+        $files->makeDirectory($this->basePath.'/config/domains', 0755, true);
+        $files->put(
+            $this->basePath.'/config/domains/example_com.php',
+            "<?php\n\nreturn ['app.name' => 'Example'];\n",
+        );
+        $files->put($this->basePath.'/bootstrap/cache/config.php', "<?php\n\nreturn [];\n");
+
+        $app = new Application($this->basePath);
+        $app->instance('config', new Repository(['app' => ['name' => 'Base']]));
+        $app->useDomain('example.com');
+
+        (new LoadDomainConfiguration)->bootstrap($app);
+
+        $this->assertSame('Example', $app['config']->get('app.name'));
+    }
 }

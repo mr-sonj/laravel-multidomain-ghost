@@ -134,7 +134,9 @@ Route::get('/pricing', [App\Http\Controllers\PricingController::class, 'index'])
 ```
 
 `page()` passes `$content` and `$seo` to the view; `blog()` adds `$dataBlog` and `$page`. Without
-`viewPath`, the package falls back to `multidomain-ghost::page` / `::blog`.
+`viewPath`, the package falls back to `multidomain-ghost::page` / `::blog` — and so does a
+`viewPath` naming a view that does not exist, with a logged warning, rather than a 500.
+`php artisan domain:list` reports those before they reach a request.
 
 ### robots.txt, ads.txt, llms.txt
 
@@ -305,6 +307,30 @@ automatically, or set `multidomain-ghost.transformer`.
 
 **Custom sitemap or feed** — take the normalized arrays instead of the default XML:
 `$controller->sitemapLinks()` and `$controller->feedData($request)`.
+
+**Swapping a controller** — the router resolves controllers through the container, so binding the
+package class to your own subclass replaces it everywhere it is routed, including the routes the
+package registers itself:
+
+```php
+// app/Providers/AppServiceProvider.php
+public function register(): void
+{
+    $this->app->bind(
+        \MrSonj\MultiDomainGhost\Http\Controllers\GhostController::class,
+        \App\Http\Controllers\GhostController::class,
+    );
+}
+```
+
+Keep the parent's constructor signature, and call `parent::` from every method you override —
+a copied method body stops tracking the package the next time it changes. `route:list` keeps
+printing the package class name; the container decides what actually runs.
+
+There are two controllers, and the webhook is **not** on `GhostController`. The auto-registered
+webhook route points at the invokable `GhostWebhookController`, so that is the class to bind to
+replace it. `GhostController::postWebhook()` is deprecated and only exists for an application that
+routed its own webhook there before the split — overriding it does nothing to the package's route.
 
 **Manual route registration** — set `GHOST_ROUTES_AUTO_REGISTER=false` and declare each domain in
 `routes/web.php`:
