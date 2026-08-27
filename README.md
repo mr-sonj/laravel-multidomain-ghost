@@ -281,6 +281,40 @@ php artisan domain:remove example.com --force  # also delete the storage directo
 Ghost routes check this file-backed registry at request time. Removing a domain therefore makes any
 route still held by a long-running process return 404.
 
+### Re-running domain:add after a package upgrade
+
+`domain:add` is idempotent, and re-running it is how a domain picks up scaffolding a newer version
+of this package introduced — the `resources/domains/{domain_key}/` directory, for instance, or a
+`storage/{domain_key}` subdirectory that did not exist before:
+
+```bash
+php artisan domain:add example.com   # backfill whatever is missing; touch nothing else
+```
+
+A file that is already present and already correct is not rewritten, so the output of a re-run is
+the short list of what actually changed. What each flag may replace:
+
+| | bare | `--force` | `--force-routes` |
+| --- | --- | --- | --- |
+| `storage/{key}/**`, `resources/domains/{key}/` | created if missing | ↑ | ↑ |
+| `vite.config.js`, Herd conf entries | added if missing | ↑ | ↑ |
+| `config/domains/{key}.php` | **never replaced** | **never replaced** | **never replaced** |
+| `resources/views/{key}/*.blade.php` | kept | replaced | kept |
+| `resources/css/{key}.css` | kept | replaced | kept |
+| `routes/domains/{key}.php` | kept | **kept** | replaced, after confirming |
+
+`--force` deliberately stops short of the route file: that file is where a domain's own routing
+lives, and sweeping it away as a side effect of asking for fresh CSS is a trade nobody would agree
+to if asked. Replacing it takes `--force-routes`, which prompts first when the file has been edited
+since it was scaffolded, and warns rather than prompts under `--no-interaction`.
+
+Anything replaced is copied to `{file}.{timestamp}.bak` beside itself first, so a flag that reached
+further than you meant costs you a `mv`, not an afternoon. Add `*.bak` to `.gitignore` if you would
+rather not see them.
+
+Neither flag can touch `config/domains/{key}.php`. It holds a domain's identity — its URL, its name,
+its cache prefix — and it is what `DomainRegistry` reads to decide the domain exists at all.
+
 ## Ghost API options
 
 `config/multidomain-ghost.php` carries only the keys worth deciding per deployment, and each is

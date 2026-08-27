@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file and published au
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- `llms.txt` and `llms-full.txt` join `ads.txt` under `resources/domains/{domain_key}/`. Each is served verbatim and gets its route only on the domains that own the file, and each is independent of the other. `routes.paths` gained `llms` (`/llms.txt`) and `llms_full` (`/llms-full.txt`); set either to `null` to leave it unregistered.
+- `domain:add --force-routes` replaces `routes/domains/{domain_key}.php`, which `--force` no longer does. It asks for confirmation when the file has been edited since it was scaffolded, and warns instead of asking under `--no-interaction`.
+- `domain:add` now copies any file it is about to replace to `{file}.{timestamp}.bak` beside itself.
+
+### Fixed
+
+- `domain:add --force` overwrote `routes/domains/{domain_key}.php` even though the option documented itself as covering views and CSS only, so anyone who ran it to refresh a stale CSS stub silently lost every route they had added for that domain. `--force` now leaves the route file alone; use `--force-routes` to replace it deliberately.
+
+### Changed
+
+- `domain:add` no longer rewrites a scaffolded file whose contents already match what it would write. Re-running it after a package upgrade — the supported way to pick up newly introduced scaffolding — now reports only what actually changed, and leaves no backups of files nobody touched.
+
 ## 2.0.0 - 2026-08-26
 
 ### Breaking

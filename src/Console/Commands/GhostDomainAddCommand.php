@@ -14,7 +14,8 @@ class GhostDomainAddCommand extends Command
 {
     protected $signature = 'domain:add
         {domain : Raw domain name, e.g. example.com}
-        {--force : Overwrite generated domain views and CSS}';
+        {--force : Overwrite this domain\'s generated views and CSS, keeping a .bak of whatever they held}
+        {--force-routes : Also overwrite routes/domains/{key}.php, which --force deliberately leaves alone}';
 
     protected $aliases = ['ghost:domain-add'];
 
@@ -97,9 +98,8 @@ PHP;
         }
 
         $routeFile = "{$routeDir}/{$sanitized}.php";
-        if (! file_exists($routeFile) || $this->option('force')) {
-            $routeNamePrefix = str_replace(['.', '-'], '_', $domain);
-            $routeStub = <<<PHP
+        $routeNamePrefix = str_replace(['.', '-'], '_', $domain);
+        $routeStub = <<<PHP
 <?php
 
 use Illuminate\Support\Facades\Route;
@@ -121,11 +121,8 @@ Route::get('/blog/{slug}', [GhostController::class, 'page'])
 Route::get('/feed', [GhostController::class, 'feed'])
     ->name('{$routeNamePrefix}_feed');
 PHP;
-            file_put_contents($routeFile, $routeStub."\n");
-            $this->line("<info>✓ Route file ready:</info> routes/domains/{$sanitized}.php");
-        } else {
-            $this->line("<comment>! Route file already exists:</comment> routes/domains/{$sanitized}.php");
-        }
+        $routeStub .= "\n";
+        $this->writeScaffold($routeFile, $routeStub, $this->mayOverwriteRoutes($routeFile, $routeStub), 'Route file');
 
         // 4. Create view folder & scaffold views
         $viewDir = resource_path("views/{$sanitized}");
@@ -148,9 +145,8 @@ PHP;
 
         // 6. Create CSS file
         $cssFile = resource_path("css/{$sanitized}.css");
-        if (! file_exists($cssFile) || $this->option('force')) {
-            @mkdir(dirname($cssFile), 0755, true);
-            $css = <<<CSS
+        @mkdir(dirname($cssFile), 0755, true);
+        $css = <<<CSS
             /* Base styles for {$domain}. Replace or extend these styles as needed. */
             :root {
                 color-scheme: light;
@@ -181,9 +177,7 @@ PHP;
                 color: #2563eb;
             }
             CSS;
-            file_put_contents($cssFile, $css."\n");
-            $this->line("<info>✓ CSS file ready:</info> resources/css/{$sanitized}.css");
-        }
+        $this->writeScaffold($cssFile, $css."\n", (bool) $this->option('force'), 'CSS file');
 
         // 7. Auto-inject CSS entry into vite.config.js
         $this->injectViteConfig($sanitized);
@@ -201,6 +195,116 @@ PHP;
         $this->info("✓ Domain {$domain} registered and scaffolded successfully!");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Write one scaffolded file, and never silently destroy what it held.
+     *
+     * The three rules this enforces, in order:
+     *
+     * A file already holding exactly these bytes is left untouched. Re-running
+     * domain:add after a package upgrade is the supported way to pick up new
+     * scaffolding, so its output has to be the short list of what actually
+     * changed, not the same nine lines every time.
+     *
+     * A file that differs and may not be overwritten is reported, not replaced.
+     *
+     * A file that differs and *is* being overwritten is copied to a timestamped
+     * .bak first. Anything reachable here is a file somebody edited, and a
+     * generator that eats an afternoon's work because a flag was one word wider
+     * than the user meant is not a generator anybody can run twice.
+     */
+    private function writeScaffold(string $path, string $contents, bool $overwrite, string $label): void
+    {
+        $relative = $this->relativePath($path);
+        $exists = is_file($path);
+        $current = $exists ? (string) file_get_contents($path) : null;
+
+        if ($current === $contents) {
+            return;
+        }
+
+        if ($exists && ! $overwrite) {
+            $this->line("<comment>! {$label} kept as it is:</comment> {$relative}");
+
+            return;
+        }
+
+        if ($exists && ! $this->backup($path)) {
+            return;
+        }
+
+        if (file_put_contents($path, $contents) === false) {
+            $this->warn("Could not write {$relative}");
+
+            return;
+        }
+
+        $this->line(sprintf(
+            '<info>✓ %s %s:</info> %s',
+            $label,
+            $exists ? 'replaced' : 'created',
+            $relative,
+        ));
+    }
+
+    /**
+     * Copy a file aside before it is overwritten, reporting where it went.
+     *
+     * Timestamped rather than a single .bak so that two runs in a row cannot
+     * leave the backup holding generated output instead of the original.
+     * Returns false when the copy failed, which aborts the overwrite: losing the
+     * edits is the outcome this whole path exists to prevent.
+     */
+    private function backup(string $path): bool
+    {
+        $backup = $path.'.'.date('Ymd-His').'.bak';
+
+        if (! @copy($path, $backup)) {
+            $this->warn("Could not back up {$this->relativePath($path)}; leaving it untouched.");
+
+            return false;
+        }
+
+        $this->line("  <comment>Previous contents saved to</comment> {$this->relativePath($backup)}");
+
+        return true;
+    }
+
+    /**
+     * Whether this run may replace an existing routes/domains/{key}.php.
+     *
+     * Behind its own flag rather than --force because the route file is the one
+     * piece of this scaffold everybody is expected to edit - it is where a
+     * domain's own routes live. --force exists to refresh the view and CSS
+     * stubs, and sweeping a domain's routing away as a side effect of asking for
+     * fresh CSS is a trade nobody would agree to if asked.
+     */
+    private function mayOverwriteRoutes(string $path, string $stub): bool
+    {
+        if (! $this->option('force-routes')) {
+            return false;
+        }
+
+        if (! is_file($path) || (string) file_get_contents($path) === $stub) {
+            return true;
+        }
+
+        if (! $this->input->isInteractive()) {
+            $this->warn("Replacing an edited {$this->relativePath($path)} because --force-routes was passed.");
+
+            return true;
+        }
+
+        return $this->confirm(
+            "{$this->relativePath($path)} has been edited since it was scaffolded. Replace it?",
+            false,
+        );
+    }
+
+    private function relativePath(string $path): string
+    {
+        return ltrim(str_replace(base_path(), '', $path), DIRECTORY_SEPARATOR);
     }
 
     private function scaffoldViews(string $sanitized, string $domain): void
@@ -290,20 +394,12 @@ BLADE;
         ];
 
         foreach ($views as $filename => $stub) {
-            $view = resource_path("views/{$sanitized}/{$filename}");
-            if (file_exists($view) && ! $this->option('force')) {
-                $this->line("<comment>! View already exists:</comment> resources/views/{$sanitized}/{$filename}");
-
-                continue;
-            }
-
-            if (file_put_contents($view, $stub."\n") === false) {
-                $this->warn("Could not write resources/views/{$sanitized}/{$filename}");
-
-                continue;
-            }
-
-            $this->line("<info>✓ View ready:</info> resources/views/{$sanitized}/{$filename}");
+            $this->writeScaffold(
+                resource_path("views/{$sanitized}/{$filename}"),
+                $stub."\n",
+                (bool) $this->option('force'),
+                'View',
+            );
         }
     }
 

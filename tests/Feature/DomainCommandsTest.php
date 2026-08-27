@@ -126,6 +126,132 @@ class DomainCommandsTest extends TestCase
         $this->assertStringContainsString("->defaults('viewPath', 'example_com/post')", $stub);
     }
 
+    public function test_force_refreshes_views_and_css_but_never_the_route_file(): void
+    {
+        $files = new Filesystem;
+        $this->artisan('domain:add', ['domain' => 'example.com'])->assertSuccessful();
+
+        $routeFile = $this->basePath.'/routes/domains/example_com.php';
+        $view = $this->basePath.'/resources/views/example_com/home.blade.php';
+        $files->put($routeFile, "<?php\n// my own routes\n");
+        $files->put($view, 'my own markup');
+
+        $this->artisan('domain:add', ['domain' => 'example.com', '--force' => true])->assertSuccessful();
+
+        // --force has always documented itself as covering views and CSS. The route
+        // file is where a domain's own routing lives, so it stays out of reach.
+        $this->assertSame("<?php\n// my own routes\n", $files->get($routeFile));
+        $this->assertStringContainsString('@extends', $files->get($view));
+    }
+
+    public function test_force_backs_up_a_replaced_view_rather_than_discarding_it(): void
+    {
+        $files = new Filesystem;
+        $this->artisan('domain:add', ['domain' => 'example.com'])->assertSuccessful();
+
+        $view = $this->basePath.'/resources/views/example_com/home.blade.php';
+        $files->put($view, 'my own markup');
+
+        $this->artisan('domain:add', ['domain' => 'example.com', '--force' => true])->assertSuccessful();
+
+        $backups = glob($view.'.*.bak') ?: [];
+        $this->assertCount(1, $backups);
+        $this->assertSame('my own markup', $files->get($backups[0]));
+    }
+
+    public function test_force_routes_asks_before_replacing_an_edited_route_file(): void
+    {
+        $files = new Filesystem;
+        $this->artisan('domain:add', ['domain' => 'example.com'])->assertSuccessful();
+
+        $routeFile = $this->basePath.'/routes/domains/example_com.php';
+        $files->put($routeFile, "<?php\n// my own routes\n");
+
+        $this->artisan('domain:add', ['domain' => 'example.com', '--force-routes' => true])
+            ->expectsConfirmation('routes/domains/example_com.php has been edited since it was scaffolded. Replace it?', 'no')
+            ->assertSuccessful();
+
+        $this->assertSame("<?php\n// my own routes\n", $files->get($routeFile));
+        $this->assertSame([], glob($routeFile.'.*.bak') ?: []);
+    }
+
+    public function test_force_routes_replaces_an_edited_route_file_once_confirmed(): void
+    {
+        $files = new Filesystem;
+        $this->artisan('domain:add', ['domain' => 'example.com'])->assertSuccessful();
+
+        $routeFile = $this->basePath.'/routes/domains/example_com.php';
+        $files->put($routeFile, "<?php\n// my own routes\n");
+
+        $this->artisan('domain:add', ['domain' => 'example.com', '--force-routes' => true])
+            ->expectsConfirmation('routes/domains/example_com.php has been edited since it was scaffolded. Replace it?', 'yes')
+            ->assertSuccessful();
+
+        $this->assertStringContainsString("Route::get('/blog/{slug}'", $files->get($routeFile));
+
+        $backups = glob($routeFile.'.*.bak') ?: [];
+        $this->assertCount(1, $backups);
+        $this->assertSame("<?php\n// my own routes\n", $files->get($backups[0]));
+    }
+
+    public function test_re_running_domain_add_rewrites_nothing_and_leaves_no_backups(): void
+    {
+        $this->artisan('domain:add', ['domain' => 'example.com'])->assertSuccessful();
+
+        $before = $this->scaffoldFingerprint();
+
+        // Re-running after a package upgrade is the supported way to pick up new
+        // scaffolding, so an unchanged domain must come out byte for byte identical
+        // even under --force - no rewrites, and no backups of files nobody touched.
+        $this->artisan('domain:add', ['domain' => 'example.com', '--force' => true])->assertSuccessful();
+
+        $this->assertSame($before, $this->scaffoldFingerprint());
+        $this->assertSame([], glob($this->basePath.'/resources/views/example_com/*.bak') ?: []);
+        $this->assertSame([], glob($this->basePath.'/resources/css/*.bak') ?: []);
+    }
+
+    public function test_neither_force_flag_overwrites_the_config_override(): void
+    {
+        $files = new Filesystem;
+        $this->artisan('domain:add', ['domain' => 'example.com'])->assertSuccessful();
+
+        $configFile = $this->basePath.'/config/domains/example_com.php';
+        $files->put($configFile, "<?php\n\nreturn ['app.name' => 'Mine'];\n");
+
+        $this->artisan('domain:add', [
+            'domain' => 'example.com',
+            '--force' => true,
+            '--force-routes' => true,
+        ])->assertSuccessful();
+
+        $this->assertSame("<?php\n\nreturn ['app.name' => 'Mine'];\n", $files->get($configFile));
+    }
+
+    /**
+     * Every scaffolded file's path mapped to a hash of its contents.
+     *
+     * @return array<string, string>
+     */
+    private function scaffoldFingerprint(): array
+    {
+        $paths = array_merge(
+            glob($this->basePath.'/resources/views/example_com/*') ?: [],
+            glob($this->basePath.'/resources/css/*') ?: [],
+            glob($this->basePath.'/routes/domains/*') ?: [],
+            glob($this->basePath.'/config/domains/*') ?: [],
+        );
+
+        $fingerprint = [];
+
+        foreach ($paths as $path) {
+            $fingerprint[str_replace($this->basePath, '', $path)] = md5_file($path);
+        }
+
+        ksort($fingerprint);
+
+        return $fingerprint;
+    }
+
     public function test_domain_add_leaves_an_existing_route_file_alone(): void
     {
         $files = new Filesystem;
