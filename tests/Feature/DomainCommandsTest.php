@@ -87,11 +87,12 @@ class DomainCommandsTest extends TestCase
         $this->assertSame(['example.com'], DomainRegistry::all());
     }
 
-    public function test_domain_add_creates_the_per_domain_assets_directory(): void
+    public function test_domain_add_leaves_the_static_files_to_the_domain(): void
     {
         $this->artisan('domain:add', ['domain' => 'example.com'])->assertSuccessful();
 
-        $assetsDirectory = $this->basePath.'/resources/domains/example_com';
+        // The domain's static files share the folder its views are scaffolded into.
+        $assetsDirectory = $this->basePath.'/resources/views/example_com';
 
         $this->assertDirectoryExists($assetsDirectory);
 
@@ -100,6 +101,7 @@ class DomainCommandsTest extends TestCase
         // false claim about seller authorisation.
         $this->assertFileDoesNotExist("{$assetsDirectory}/robots.txt");
         $this->assertFileDoesNotExist("{$assetsDirectory}/ads.txt");
+        $this->assertDirectoryDoesNotExist($this->basePath.'/resources/domains');
     }
 
     public function test_domain_add_scaffolds_a_runnable_domain_route_file(): void

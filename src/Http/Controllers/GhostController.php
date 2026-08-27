@@ -157,7 +157,7 @@ class GhostController extends Controller
     /**
      * The domain's robots policy.
      *
-     * A resources/domains/{domain_key}/robots.txt replaces this method's output
+     * A resources/views/{domain_key}/robots.txt replaces this method's output
      * wholesale rather than being appended to it: appending would keep imposing
      * the package's own lines on every domain, which is the coupling the file is
      * there to break. The file's author owns the Sitemap: line too.
@@ -232,7 +232,7 @@ class GhostController extends Controller
     }
 
     /**
-     * One of the text files under resources/domains/{domain_key}/, served verbatim.
+     * One of the text files under resources/views/{domain_key}/, served verbatim.
      *
      * Verbatim because each of these is somebody else's format - ads.txt is IAB's,
      * llms.txt is a markdown convention - and rewriting a format you do not own is

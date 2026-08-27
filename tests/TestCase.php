@@ -69,11 +69,11 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
-     * @param  array<string, string>  $files  Paths relative to resources/domains.
+     * @param  array<string, string>  $files  Paths relative to resources/views.
      */
     protected function setDomainAssets(array $files): void
     {
-        $this->writeTemporaryFiles(base_path('resources/domains'), $files);
+        $this->writeTemporaryFiles(base_path('resources/views'), $files);
     }
 
     private function writeTemporaryFiles(string $root, array $files): void

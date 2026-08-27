@@ -64,7 +64,7 @@ return [
     'max_blog_page' => (int) env('GHOST_MAX_BLOG_PAGE', 200),
 
     'robots' => [
-        // Consulted only when the domain has no resources/domains/{domain_key}/robots.txt.
+        // Consulted only when the domain has no resources/views/{domain_key}/robots.txt.
         // That file, when present, replaces the generated policy entirely.
         'content_signal' => env('GHOST_ROBOTS_CONTENT_SIGNAL', ''),
     ],

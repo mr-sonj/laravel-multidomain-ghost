@@ -94,8 +94,7 @@ a file no domain request ever reads.
 | `storage/example_com/` | Sessions, logs, cache and compiled views for this domain. |
 | `config/domains/example_com.php` | Registers the domain and overrides config with dot notation. |
 | `routes/domains/example_com.php` | This domain's content routes (`/`, `/blog`, `/blog/{slug}`, `/feed`). |
-| `resources/views/example_com/` | `main`, `home`, `page`, `post`, `blog`, `contact`. |
-| `resources/domains/example_com/` | Optional `robots.txt`, `ads.txt`, `llms.txt`, `llms-full.txt`. |
+| `resources/views/example_com/` | `main`, `home`, `page`, `post`, `blog`, `contact`, plus optional `robots.txt`, `ads.txt`, `llms.txt`, `llms-full.txt`. |
 | `resources/css/example_com.css` + Vite input entry | Per-domain stylesheet. |
 
 Route files load automatically from the domain registry, already inside the domain's route group,
@@ -139,10 +138,11 @@ Route::get('/pricing', [App\Http\Controllers\PricingController::class, 'index'])
 
 ### robots.txt, ads.txt, llms.txt
 
-`public/` is one webserver root shared by every domain, so these files live per-domain under
-`resources/domains/{key}/` instead. `ads.txt`, `llms.txt` and `llms-full.txt` are served verbatim
-and have no generated form — no file, no route. `robots.txt`, when present, **replaces** the
-generated policy entirely, including the `Sitemap:` line. All are sent as `text/plain`.
+`public/` is one webserver root shared by every domain, so these files live per-domain in the
+domain's own view folder, `resources/views/{key}/`, beside its Blade files. `ads.txt`, `llms.txt`
+and `llms-full.txt` are served verbatim and have no generated form — no file, no route.
+`robots.txt`, when present, **replaces** the generated policy entirely, including the `Sitemap:`
+line. All are sent as `text/plain`.
 
 ---
 
@@ -173,7 +173,7 @@ already correct. What each flag may replace:
 
 | | bare | `--force` | `--force-routes` |
 | --- | --- | --- | --- |
-| `storage/{key}/`, `resources/domains/{key}/`, Vite entry | created if missing | ↑ | ↑ |
+| `storage/{key}/`, `resources/views/{key}/`, Vite entry | created if missing | ↑ | ↑ |
 | `config/domains/{key}.php` | **never replaced** | **never replaced** | **never replaced** |
 | `resources/views/{key}/*.blade.php`, `resources/css/{key}.css` | kept | replaced | kept |
 | `routes/domains/{key}.php` | kept | **kept** | replaced, after confirming |

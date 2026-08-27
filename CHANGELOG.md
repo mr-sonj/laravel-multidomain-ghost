@@ -6,9 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Unreleased
 
+### Breaking
+
+- A domain's `robots.txt`, `ads.txt`, `llms.txt` and `llms-full.txt` moved from `resources/domains/{domain_key}/` to that domain's own view folder, `resources/views/{domain_key}/`. A domain has one folder under `resources/` again instead of two, beside its Blade files. Move the files across — `mv resources/domains/{key}/* resources/views/{key}/` for each domain, then delete `resources/domains/`. There is no fallback to the old location: a file left behind simply stops being served, and `/ads.txt`, `/llms.txt` and `/llms-full.txt` lose their routes. `domain:add` no longer creates `resources/domains/{key}/`.
+
 ### Added
 
-- `llms.txt` and `llms-full.txt` join `ads.txt` under `resources/domains/{domain_key}/`. Each is served verbatim and gets its route only on the domains that own the file, and each is independent of the other. `routes.paths` gained `llms` (`/llms.txt`) and `llms_full` (`/llms-full.txt`); set either to `null` to leave it unregistered.
+- `llms.txt` and `llms-full.txt` join `ads.txt` under `resources/views/{domain_key}/`. Each is served verbatim and gets its route only on the domains that own the file, and each is independent of the other. `routes.paths` gained `llms` (`/llms.txt`) and `llms_full` (`/llms-full.txt`); set either to `null` to leave it unregistered.
 - `domain:add --force-routes` replaces `routes/domains/{domain_key}.php`, which `--force` no longer does. It asks for confirmation when the file has been edited since it was scaffolded, and warns instead of asking under `--no-interaction`.
 - `domain:add` now copies any file it is about to replace to `{file}.{timestamp}.bak` beside itself.
 
@@ -20,7 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - `domain:add` no longer rewrites a scaffolded file whose contents already match what it would write. Re-running it after a package upgrade — the supported way to pick up newly introduced scaffolding — now reports only what actually changed, and leaves no backups of files nobody touched.
 
-## 2.0.0 - 2026-08-26
+## 1.2.4 - 2026-08-26
 
 ### Breaking
 
